@@ -1,0 +1,132 @@
+"use client";
+
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
+
+import { LanguageToggle } from "@/components/i18n/language-toggle";
+import { useI18n } from "@/components/i18n/language-provider";
+import { LampPanel } from "@/components/auth/lamp-panel";
+import { LoginForm } from "@/components/auth/login-form";
+import { Card, CardContent } from "@/components/shared/card";
+
+const desktopPanelVariants = {
+  hidden: {
+    opacity: 0,
+    y: 48,
+    filter: "blur(14px)",
+  },
+  shown: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+  },
+};
+
+const mobileOverlayVariants = {
+  hidden: {
+    y: "105%",
+    opacity: 0,
+  },
+  shown: {
+    y: 0,
+    opacity: 1,
+  },
+};
+
+export function LoginExperience() {
+  const [revealed, setRevealed] = useState(false);
+  const { messages } = useI18n();
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#090b10]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#090b10_0%,#090b10_100%)]"
+      />
+      <motion.div
+        aria-hidden
+        animate={{
+          opacity: revealed ? 1 : 0,
+        }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-none absolute inset-0 hidden lg:block bg-[linear-gradient(90deg,rgba(255,238,193,0)_30%,rgba(255,238,193,0.015)_52%,rgba(255,238,193,0.03)_64%,rgba(255,238,193,0.04)_74%,rgba(255,238,193,0.02)_86%,rgba(255,238,193,0)_100%)]"
+      />
+      <div className="absolute right-4 top-4 z-30 sm:right-6 sm:top-6">
+        <LanguageToggle dark />
+      </div>
+      <div className="relative z-10 mx-auto grid min-h-screen w-full max-w-[96rem] lg:grid-cols-2">
+        <div className="relative overflow-visible">
+          <LampPanel revealed={revealed} onTrigger={() => setRevealed((current) => !current)} />
+        </div>
+
+        <div className="relative hidden min-h-full items-center justify-center overflow-visible bg-transparent lg:flex">
+          <motion.div
+            initial="hidden"
+            animate={revealed ? "shown" : "hidden"}
+            variants={desktopPanelVariants}
+            transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+            className="relative z-10 flex w-full justify-center px-8"
+          >
+            <Card className="relative w-full max-w-[24rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(17,18,21,0.9),rgba(8,9,12,0.96))] shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_-10%_24%,rgba(255,255,255,0.26),rgba(255,255,255,0.14)_14%,rgba(255,255,255,0.05)_28%,transparent_56%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04)_24%,rgba(255,255,255,0.015)_40%,transparent_62%)]" />
+              <CardContent className="relative p-9">
+                <div className="mb-8 flex flex-col items-center text-center">
+                  <div className="mb-4 rounded-2xl border border-white/10 bg-white/6 p-3 text-[#f0ebe1]">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-3xl font-semibold tracking-tight text-white">{messages.login.title}</h2>
+                  <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
+                </div>
+                <LoginForm revealed={revealed} />
+                <div className="mt-8 rounded-[1.5rem] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 text-xs leading-6 text-[#b6b1a8]">
+                  <p className="font-medium text-[#f3efea]">{messages.login.demoAccess}</p>
+                  <p className="mt-2">{messages.login.demoAdmin}: <span className="font-mono text-[#f3efe8]">admin@techscore.local</span></p>
+                  <p>{messages.login.demoJudge}: <span className="font-mono text-[#f3efe8]">maya@techscore.local</span></p>
+                  <p>{messages.login.demoTeam}: <span className="font-mono text-[#f3efe8]">team1@techscore.local</span></p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+          {!revealed ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-16 px-10 text-center text-sm text-[#7c766a]">
+              {messages.login.revealHint}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <motion.div
+        initial="hidden"
+        animate={revealed ? "shown" : "hidden"}
+        variants={mobileOverlayVariants}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed inset-x-0 bottom-0 top-0 z-40 lg:hidden"
+        style={{ pointerEvents: revealed ? "auto" : "none" }}
+      >
+        <div className="absolute inset-0 bg-black/48 backdrop-blur-sm" />
+        <div className="absolute inset-x-0 bottom-0 top-[18svh] overflow-hidden rounded-t-[2.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(17,18,21,0.96),rgba(8,9,12,0.99))] shadow-[0_-24px_70px_rgba(0,0,0,0.55)]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.18),rgba(255,255,255,0.08)_14%,rgba(255,255,255,0.025)_30%,transparent_56%)]" />
+          <div className="mx-auto flex h-full max-w-xl flex-col overflow-y-auto px-6 pb-10 pt-6">
+            <div className="mx-auto mb-5 h-1.5 w-14 rounded-full bg-white/12" />
+            <div className="mb-8 flex flex-col items-center text-center">
+              <div className="mb-4 rounded-2xl border border-white/10 bg-white/6 p-3 text-[#f0ebe1]">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <h2 className="text-3xl font-semibold tracking-tight text-white">{messages.login.title}</h2>
+              <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
+            </div>
+            <LoginForm revealed={revealed} />
+            <div className="mt-8 rounded-[1.5rem] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 text-xs leading-6 text-[#b6b1a8]">
+              <p className="font-medium text-[#f3efea]">{messages.login.demoAccess}</p>
+              <p className="mt-2">{messages.login.demoAdmin}: <span className="font-mono text-[#f3efe8]">admin@techscore.local</span></p>
+              <p>{messages.login.demoJudge}: <span className="font-mono text-[#f3efe8]">maya@techscore.local</span></p>
+              <p>{messages.login.demoTeam}: <span className="font-mono text-[#f3efe8]">team1@techscore.local</span></p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}

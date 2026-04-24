@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  JUDGE
+  TEAM
+}
+
+enum TeamStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ScoreStatus {
+  DRAFT
+  SUBMITTED
+  EDITED
+}
+
+enum JudgeScope {
+  ALL
+  ASSIGNED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String           @id @default(cuid())
+  name         String
+  email        String           @unique
+  passwordHash String
+  role         Role
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lastLoginAt  DateTime?
+  scores       Score[]
+  assignments  TeamAssignment[]
+  auditEvents  ScoreAudit[]
+  ownedTeam    Team?            @relation("TeamOwner")
+  approvedTeams Team[]          @relation("TeamApprover")
+}
+
+model Team {
+  id                 String           @id @default(cuid())
+  teamCode           String           @unique
+  teamName           String
+  projectTitle       String
+  projectDescription String
+  organization       String?
+  teamMembers        String
+  videoUrl           String?
+  imageUrl           String?
+  status             TeamStatus       @default(ACTIVE)
+  categoryId         String?
+  ownerUserId        String?          @unique
+  submissionStatus   ApprovalStatus   @default(DRAFT)
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  approvedById       String?
+  reviewNote         String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  assignments        TeamAssignment[]
+  scores             Score[]
+  category           Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  ownerUser          User?            @relation("TeamOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  approvedBy         User?            @relation("TeamApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+}
+
+model Competition {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  categories  Category[]
+  settings    Settings[]
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  competitionId String
+  name         String
+  description  String?
+  displayOrder Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  competition  Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  teams        Team[]
+  criteria     Criterion[]
+
+  @@unique([competitionId, name])
+}
+
+model TeamAssignment {
+  id        String   @id @default(cuid())
+  teamId     String
+  judgeId    String
+  createdAt  DateTime @default(now())
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  judge      User     @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, judgeId])
+}
+
+model Criterion {
+  id           String      @id @default(cuid())
+  categoryId    String
+  name         String
+  description  String?
+  minScore     Int
+  maxScore     Int
+  weight       Float       @default(0)
+  displayOrder Int         @default(0)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  category     Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  scoreItems   ScoreItem[]
+
+  @@unique([categoryId, name])
+}
+
+model Score {
+  id            String       @id @default(cuid())
+  teamId        String
+  judgeId       String
+  status        ScoreStatus  @default(DRAFT)
+  totalScore    Float        @default(0)
+  weightedScore Float        @default(0)
+  comment       String       @default("")
+  submittedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  judge         User         @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  items         ScoreItem[]
+  audits        ScoreAudit[]
+
+  @@unique([teamId, judgeId])
+}
+
+model ScoreItem {
+  id            String    @id @default(cuid())
+  scoreId       String
+  criterionId   String
+  numericScore  Float
+  weightedValue Float
+  comment       String    @default("")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  score         Score     @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  criterion     Criterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([scoreId, criterionId])
+}
+
+model Settings {
+  id                    String     @id @default("default")
+  competitionId         String?
+  competitionName       String
+  judgingRounds         Int        @default(1)
+  allowEditAfterSubmit  Boolean    @default(true)
+  showLeaderboard       Boolean    @default(false)
+  judgeScope            JudgeScope @default(ALL)
+  submissionDeadline    DateTime?
+  exportIncludeComments Boolean    @default(true)
+  updatedAt             DateTime   @updatedAt
+  competition           Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+}
+
+model ScoreAudit {
+  id        String   @id @default(cuid())
+  scoreId    String
+  actorId    String
+  action     String
+  snapshot   String?
+  createdAt  DateTime @default(now())
+  score      Score    @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+}
