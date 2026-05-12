@@ -65,6 +65,7 @@ model Team {
   imageUrl           String?
   documentUrl        String?
   documentName       String?
+  documentLinks      String?
   status             TeamStatus       @default(ACTIVE)
   categoryId         String?
   ownerUserId        String?          @unique

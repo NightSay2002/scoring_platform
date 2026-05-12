@@ -109,22 +109,26 @@ export default async function JudgeScoringPage({
                 </div>
               )}
 
-              {data.team.documentUrl ? (
-                <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              {data.team.documentLinks.length ? (
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">{t.submittedFile}</p>
-                  <p className="break-all text-sm font-medium text-slate-950">
-                    {data.team.documentName || data.team.documentUrl}
-                  </p>
-                  <Link
-                    href={data.team.documentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
-                    className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                  >
-                    <Download className="h-4 w-4" />
-                    {t.downloadFile}
-                  </Link>
+                  <div className="space-y-2">
+                    {data.team.documentLinks.map((link, index) => (
+                      <div key={`${link.url}-${index}`} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="break-all text-sm font-medium text-slate-950">{link.name}</p>
+                        <Link
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          download
+                          className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                        >
+                          <Download className="h-4 w-4" />
+                          {t.downloadFile}
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">

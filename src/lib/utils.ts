@@ -48,6 +48,66 @@ export function parseMembers(value: string) {
     .filter(Boolean);
 }
 
+export type DocumentLink = {
+  name: string;
+  url: string;
+};
+
+export function normalizeDocumentLinks(links?: Array<Partial<DocumentLink>> | null) {
+  return (links ?? [])
+    .map((link) => ({
+      name: link.name?.trim() ?? "",
+      url: link.url?.trim() ?? "",
+    }))
+    .filter((link) => link.name && link.url);
+}
+
+export function serializeDocumentLinks(links?: Array<Partial<DocumentLink>> | null) {
+  const normalized = normalizeDocumentLinks(links);
+  return normalized.length ? JSON.stringify(normalized) : null;
+}
+
+export function parseDocumentLinks(
+  value?: string | null,
+  fallback?: { documentName?: string | null; documentUrl?: string | null },
+) {
+  if (value) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        const links = normalizeDocumentLinks(
+          parsed.map((entry) =>
+            entry && typeof entry === "object"
+              ? {
+                  name: "name" in entry && typeof entry.name === "string" ? entry.name : "",
+                  url: "url" in entry && typeof entry.url === "string" ? entry.url : "",
+                }
+              : {},
+          ),
+        );
+
+        if (links.length) {
+          return links;
+        }
+      }
+    } catch {
+      // Fall back to the legacy single document fields below.
+    }
+  }
+
+  const fallbackUrl = fallback?.documentUrl?.trim() ?? "";
+  if (!fallbackUrl) {
+    return [];
+  }
+
+  return [
+    {
+      name: fallback?.documentName?.trim() || fallbackUrl,
+      url: fallbackUrl,
+    },
+  ];
+}
+
 export function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
@@ -93,4 +153,3 @@ export function csvEscape(value: string | number | null | undefined) {
 
   return stringValue;
 }
-

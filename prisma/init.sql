@@ -56,6 +56,7 @@ CREATE TABLE "Team" (
     "imageUrl" TEXT,
     "documentUrl" TEXT,
     "documentName" TEXT,
+    "documentLinks" TEXT,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "categoryId" TEXT,
     "ownerUserId" TEXT,

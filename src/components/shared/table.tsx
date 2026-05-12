@@ -14,8 +14,12 @@ export function DataTable({
   return <table className={cn("min-w-[700px] divide-y divide-slate-200 text-sm", className)}>{children}</table>;
 }
 
-export function THead({ children }: { children: React.ReactNode }) {
-  return <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">{children}</thead>;
+export function THead({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <thead className={cn("bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500", className)}>
+      {children}
+    </thead>
+  );
 }
 
 export function TH({ children, className }: { children: React.ReactNode; className?: string }) {

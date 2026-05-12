@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CheckCircle2, FileText, Image as ImageIcon, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
 
 import {
   approveTeamSubmissionAction,
@@ -36,6 +36,7 @@ type TeamRow = {
   imageUrl: string;
   documentUrl: string;
   documentName: string;
+  documentLinks: DocumentLink[];
   submissionStatus: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote: string;
   submittedCount: number;
@@ -62,6 +63,11 @@ type TeamAccount = {
   email: string;
 };
 
+type DocumentLink = {
+  name: string;
+  url: string;
+};
+
 const emptyForm = {
   id: "",
   teamCode: "",
@@ -77,8 +83,17 @@ const emptyForm = {
   imageUrl: "",
   documentUrl: "",
   documentName: "",
+  documentLinks: [] as DocumentLink[],
   reviewNote: "",
 };
+
+function syncDocumentFields(documentLinks: DocumentLink[]) {
+  return {
+    documentLinks,
+    documentUrl: documentLinks[0]?.url ?? "",
+    documentName: documentLinks[0]?.name ?? "",
+  };
+}
 
 export function TeamManagementClient({
   teams,
@@ -163,6 +178,7 @@ export function TeamManagementClient({
       imageUrl: team.imageUrl,
       documentUrl: team.documentUrl,
       documentName: team.documentName,
+      documentLinks: team.documentLinks,
       reviewNote: team.reviewNote,
     });
     setAvatarFileName("");
@@ -197,7 +213,26 @@ export function TeamManagementClient({
 
   async function handleSave() {
     startTransition(async () => {
-      const result = await upsertTeamAction(form);
+      const documentLinks: DocumentLink[] = [];
+
+      for (const link of form.documentLinks) {
+        const name = link.name.trim();
+        const url = link.url.trim();
+        if (!name && !url) {
+          continue;
+        }
+        if (!name || !url) {
+          setMessage(t.documentLinkIncomplete);
+          return;
+        }
+
+        documentLinks.push({ name, url });
+      }
+
+      const result = await upsertTeamAction({
+        ...form,
+        ...syncDocumentFields(documentLinks),
+      });
       if (result?.error) {
         setMessage(result.error);
         return;
@@ -239,10 +274,37 @@ export function TeamManagementClient({
         ...current,
         ...(kind === "avatar"
           ? { imageUrl: uploadedUrl }
-          : { documentUrl: uploadedUrl, documentName: uploadedName }),
+          : syncDocumentFields([...current.documentLinks, { name: uploadedName, url: uploadedUrl }])),
       }));
       setMessage(t.uploaded);
     });
+  }
+
+  function updateDocumentLink(index: number, field: keyof DocumentLink, value: string) {
+    setForm((current) => {
+      const nextLinks = current.documentLinks.map((link, linkIndex) =>
+        linkIndex === index ? { ...link, [field]: value } : link,
+      );
+
+      return {
+        ...current,
+        ...syncDocumentFields(nextLinks),
+      };
+    });
+  }
+
+  function addDocumentLink() {
+    setForm((current) => ({
+      ...current,
+      documentLinks: [...current.documentLinks, { name: "", url: "" }],
+    }));
+  }
+
+  function removeDocumentLink(index: number) {
+    setForm((current) => ({
+      ...current,
+      ...syncDocumentFields(current.documentLinks.filter((_, linkIndex) => linkIndex !== index)),
+    }));
   }
 
   async function handleDelete(teamId: string) {
@@ -274,7 +336,7 @@ export function TeamManagementClient({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.24fr_0.76fr]">
+    <div className="space-y-6">
       <Card>
         <CardHeader
           title={t.submittedWorksTitle}
@@ -344,9 +406,10 @@ export function TeamManagementClient({
               <option value="REJECTED">{common.statuses.rejected}</option>
             </select>
           </div>
+          <div className="max-h-[430px] overflow-y-auto rounded-2xl border border-slate-200 [scrollbar-width:thin]">
           <Table>
             <DataTable>
-              <THead>
+              <THead className="sticky top-0 z-10">
                 <tr>
                   <TH>{t.tableTeamId}</TH>
                   <TH>{t.tableWork}</TH>
@@ -417,6 +480,7 @@ export function TeamManagementClient({
               </TBody>
             </DataTable>
           </Table>
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -538,11 +602,51 @@ export function TeamManagementClient({
                 <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" className="sr-only" onChange={(event) => handleUpload("document", event.target.files?.[0] ?? null)} />
               </label>
               {documentFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {documentFileName}</p> : null}
-              {form.documentUrl ? (
-                <a href={form.documentUrl} target="_blank" rel="noreferrer" className="block break-all text-xs font-medium text-sky-700">
-                  {form.documentName || form.documentUrl}
-                </a>
-              ) : null}
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-slate-700">{t.documentLinks}</p>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={addDocumentLink}>
+                    <Plus className="h-4 w-4" />
+                    {t.addDocumentUrl}
+                  </Button>
+                </div>
+                {form.documentLinks.length ? (
+                  <div className="space-y-2">
+                    {form.documentLinks.map((link, index) => (
+                      <div key={`${index}-${link.url}`} className="grid gap-2 md:grid-cols-[0.8fr_1.2fr_auto]">
+                        <Input
+                          value={link.name}
+                          placeholder={t.documentNamePlaceholder}
+                          onChange={(event) => updateDocumentLink(index, "name", event.target.value)}
+                        />
+                        <Input
+                          value={link.url}
+                          placeholder={t.documentUrlPlaceholder}
+                          onChange={(event) => updateDocumentLink(index, "url", event.target.value)}
+                        />
+                        <Button variant="ghost" size="sm" className="gap-2 text-rose-600" onClick={() => removeDocumentLink(index)}>
+                          <Trash2 className="h-4 w-4" />
+                          {t.removeDocumentUrl}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">{t.noDocumentLinks}</p>
+                )}
+                {form.documentLinks.length ? (
+                  <div className="space-y-1">
+                    {form.documentLinks
+                      .filter((link) => link.name.trim() && link.url.trim())
+                      .map((link, index) => (
+                        <a key={`${link.url}-${index}`} href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 break-all text-xs font-medium text-sky-700">
+                          <Link2 className="h-4 w-4 shrink-0" />
+                          {link.name}
+                        </a>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="space-y-2">

@@ -62,6 +62,16 @@ function getWeightStyle(weight: number, weights: number[]): CSSProperties {
   };
 }
 
+function normalizeScoreInput(value: string, minScore: number, maxScore: number) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return minScore;
+  }
+
+  const cappedMax = Math.min(maxScore, 100);
+  return Math.min(Math.max(Number(digits), minScore), cappedMax);
+}
+
 export function ScoringForm({
   teamId,
   criteria,
@@ -165,10 +175,10 @@ export function ScoringForm({
   const completionRate = navigation.totalTeams ? round((navigation.submittedCount / navigation.totalTeams) * 100, 0) : 0;
   const locked = scoringClosed || ((status === "SUBMITTED" || status === "EDITED") && !allowEditAfterSubmit);
 
-  function updateScore(criterionId: string, value: number) {
+  function updateScore(criterionId: string, value: string, minScore: number, maxScore: number) {
     setScoreMap((current) => ({
       ...current,
-      [criterionId]: value,
+      [criterionId]: normalizeScoreInput(value, minScore, maxScore),
     }));
   }
 
@@ -179,10 +189,10 @@ export function ScoringForm({
     }));
   }
 
-  function updateSubScore(subCriterionId: string, value: number) {
+  function updateSubScore(subCriterionId: string, value: string, minScore: number, maxScore: number) {
     setSubScoreMap((current) => ({
       ...current,
-      [subCriterionId]: value,
+      [subCriterionId]: normalizeScoreInput(value, minScore, maxScore),
     }));
   }
 
@@ -299,11 +309,20 @@ export function ScoringForm({
               key={criterion.id}
               className="grid gap-4 rounded-2xl border border-slate-200 p-4 md:grid-cols-[1fr_100px_120px] md:items-start"
             >
-              <div>
-                <div className="font-medium text-slate-950">{criterion.name}</div>
-                <div className="mt-1 text-sm text-slate-500">{criterion.description}</div>
-                <div className="mt-2 text-xs text-slate-500" style={getWeightStyle(criterion.weight, criterionWeights)}>
-                  {t.range} {criterion.minScore} - {criterion.maxScore} | {t.weight} {criterion.weight}%
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.criterionNameLabel}</p>
+                  <div className="mt-1 font-medium text-slate-950">{criterion.name}</div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.rangeWeightLabel}</p>
+                  <div className="mt-1 text-sm" style={getWeightStyle(criterion.weight, criterionWeights)}>
+                    {criterion.minScore} - {criterion.maxScore} | {criterion.weight}%
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
+                  <div className="mt-1 text-sm leading-6 text-slate-500">{criterion.description || common.labels.notProvided}</div>
                 </div>
               </div>
               {criterion.subCriteria.length ? (
@@ -317,27 +336,38 @@ export function ScoringForm({
                   <div className="space-y-3 md:col-span-3">
                     {criterion.subCriteria.map((subCriterion) => (
                       <div key={subCriterion.id} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-[1fr_100px_120px] md:items-start">
-                        <div>
-                          <div className="text-sm font-medium text-slate-900">{subCriterion.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">{subCriterion.description}</div>
-                          <div
-                            className="mt-2 text-xs text-slate-500"
-                            style={getWeightStyle(
-                              subCriterion.weight,
-                              criterion.subCriteria.map((item) => item.weight),
-                            )}
-                          >
-                            {t.range} {subCriterion.minScore} - {subCriterion.maxScore} | {t.weight} {subCriterion.weight}%
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.criterionNameLabel}</p>
+                            <div className="mt-1 text-sm font-medium text-slate-900">{subCriterion.name}</div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.rangeWeightLabel}</p>
+                            <div
+                              className="mt-1 text-xs"
+                              style={getWeightStyle(
+                                subCriterion.weight,
+                                criterion.subCriteria.map((item) => item.weight),
+                              )}
+                            >
+                              {subCriterion.minScore} - {subCriterion.maxScore} | {subCriterion.weight}%
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
+                            <div className="mt-1 text-xs leading-5 text-slate-500">{subCriterion.description || common.labels.notProvided}</div>
                           </div>
                         </div>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           min={subCriterion.minScore}
                           max={subCriterion.maxScore}
                           value={subScoreMap[subCriterion.id] ?? subCriterion.minScore}
                           disabled={locked || pending}
                           onFocus={selectZeroOnFocus}
-                          onChange={(event) => updateSubScore(subCriterion.id, Number(event.target.value))}
+                          onChange={(event) => updateSubScore(subCriterion.id, event.target.value, subCriterion.minScore, subCriterion.maxScore)}
                           className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                         />
                         <div className="rounded-xl bg-white px-3 py-3 text-sm text-slate-600">
@@ -357,13 +387,15 @@ export function ScoringForm({
               ) : (
                 <>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     min={criterion.minScore}
                     max={criterion.maxScore}
                     value={scoreMap[criterion.id] ?? criterion.minScore}
                     disabled={locked || pending}
                     onFocus={selectZeroOnFocus}
-                    onChange={(event) => updateScore(criterion.id, Number(event.target.value))}
+                    onChange={(event) => updateScore(criterion.id, event.target.value, criterion.minScore, criterion.maxScore)}
                     className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   />
                   <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">

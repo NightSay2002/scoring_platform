@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { FileText, Image as ImageIcon, Save, Send, Upload } from "lucide-react";
+import { FileText, Image as ImageIcon, Link2, Save, Send, Upload } from "lucide-react";
 
 import { saveTeamDraftAction, submitTeamForApprovalAction } from "@/actions/team";
 import { useI18n } from "@/components/i18n/language-provider";
@@ -38,10 +38,24 @@ type TeamSubmission = {
   imageUrl: string;
   documentUrl: string;
   documentName: string;
+  documentLinks: DocumentLink[];
   submissionStatus: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote: string;
   updatedAt: Date;
 };
+
+type DocumentLink = {
+  name: string;
+  url: string;
+};
+
+function syncDocumentFields(documentLinks: DocumentLink[]) {
+  return {
+    documentLinks,
+    documentUrl: documentLinks[0]?.url ?? "",
+    documentName: documentLinks[0]?.name ?? "",
+  };
+}
 
 export function TeamSubmissionForm({
   competitions,
@@ -68,6 +82,7 @@ export function TeamSubmissionForm({
     imageUrl: team.imageUrl,
     documentUrl: team.documentUrl,
     documentName: team.documentName,
+    documentLinks: team.documentLinks,
   });
   const [submissionStatus, setSubmissionStatus] = useState(team.submissionStatus);
   const [updatedAt, setUpdatedAt] = useState(team.updatedAt.toISOString());
@@ -153,7 +168,7 @@ export function TeamSubmissionForm({
         ...current,
         ...(kind === "avatar"
           ? { imageUrl: uploadedUrl }
-          : { documentUrl: uploadedUrl, documentName: uploadedName }),
+          : syncDocumentFields([...current.documentLinks, { name: uploadedName, url: uploadedUrl }])),
       }));
       setMessage(t.uploaded);
     });
@@ -306,11 +321,15 @@ export function TeamSubmissionForm({
               <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" disabled={locked || pending} className="sr-only" onChange={(event) => handleUpload("document", event.target.files?.[0] ?? null)} />
             </label>
             {documentFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {documentFileName}</p> : null}
-            {form.documentUrl ? (
-              <a href={form.documentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 break-all text-xs font-medium text-sky-700">
-                <FileText className="h-4 w-4 shrink-0" />
-                {form.documentName || form.documentUrl}
-              </a>
+            {form.documentLinks.length ? (
+              <div className="space-y-1">
+                {form.documentLinks.map((link, index) => (
+                  <a key={`${link.url}-${index}`} href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 break-all text-xs font-medium text-sky-700">
+                    {index === 0 ? <FileText className="h-4 w-4 shrink-0" /> : <Link2 className="h-4 w-4 shrink-0" />}
+                    {link.name}
+                  </a>
+                ))}
+              </div>
             ) : null}
           </div>
         </div>

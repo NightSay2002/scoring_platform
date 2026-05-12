@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
+import { normalizeDocumentLinks, serializeDocumentLinks, type DocumentLink } from "@/lib/utils";
 import {
   competitionSchema,
   categorySchema,
@@ -126,6 +127,8 @@ export async function uploadTeamAssetAction(formData: FormData) {
 }
 
 function buildTeamData(parsed: ReturnType<typeof teamSchema.parse>) {
+  const documentLinks = parsed.documentLinks === undefined ? undefined : normalizeDocumentLinks(parsed.documentLinks);
+
   return {
     teamCode: parsed.teamCode.trim(),
     teamName: parsed.teamName.trim(),
@@ -136,8 +139,9 @@ function buildTeamData(parsed: ReturnType<typeof teamSchema.parse>) {
     teamMembers: parsed.teamMembers.trim(),
     videoUrl: parsed.videoUrl?.trim() || null,
     imageUrl: parsed.imageUrl?.trim() || null,
-    documentUrl: parsed.documentUrl?.trim() || null,
-    documentName: parsed.documentName?.trim() || null,
+    documentUrl: documentLinks ? documentLinks[0]?.url ?? null : parsed.documentUrl?.trim() || null,
+    documentName: documentLinks ? documentLinks[0]?.name ?? null : parsed.documentName?.trim() || null,
+    ...(documentLinks ? { documentLinks: serializeDocumentLinks(documentLinks) } : {}),
     reviewNote: parsed.reviewNote?.trim() || null,
   };
 }
@@ -181,6 +185,7 @@ export async function upsertTeamAction(payload: {
   imageUrl?: string;
   documentUrl?: string;
   documentName?: string;
+  documentLinks?: DocumentLink[];
   ownerUserId?: string;
   submissionStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote?: string;
@@ -950,6 +955,7 @@ async function saveTeamSubmission(
     imageUrl?: string;
     documentUrl?: string;
     documentName?: string;
+    documentLinks?: DocumentLink[];
   },
   mode: "draft" | "submit",
 ) {
@@ -1013,6 +1019,7 @@ export async function saveTeamDraftAction(payload: {
   imageUrl?: string;
   documentUrl?: string;
   documentName?: string;
+  documentLinks?: DocumentLink[];
 }) {
   return saveTeamSubmission(payload, "draft");
 }
@@ -1030,6 +1037,7 @@ export async function submitTeamForApprovalAction(payload: {
   imageUrl?: string;
   documentUrl?: string;
   documentName?: string;
+  documentLinks?: DocumentLink[];
 }) {
   return saveTeamSubmission(payload, "submit");
 }

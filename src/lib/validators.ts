@@ -34,6 +34,15 @@ export const teamSchema = z.object({
     .trim()
     .optional()
     .or(z.literal("")),
+  documentLinks: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, "Document name is required."),
+        url: z.string().trim().min(1, "Document URL is required."),
+      }),
+    )
+    .max(20, "You can add up to 20 document links.")
+    .optional(),
   submissionStatus: z.enum(["DRAFT", "PENDING", "APPROVED", "REJECTED"]).optional(),
   reviewNote: z.string().optional(),
 }).superRefine((value, context) => {

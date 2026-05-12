@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { formatRelativeTime, parseMembers, round } from "@/lib/utils";
+import { formatRelativeTime, parseDocumentLinks, parseMembers, round } from "@/lib/utils";
 
 const teamInclude = {
   category: {
@@ -413,6 +413,10 @@ export async function getTeamsManagementData() {
         imageUrl: team.imageUrl ?? "",
         documentUrl: team.documentUrl ?? "",
         documentName: team.documentName ?? "",
+        documentLinks: parseDocumentLinks(team.documentLinks, {
+          documentName: team.documentName,
+          documentUrl: team.documentUrl,
+        }),
         submissionStatus: team.submissionStatus,
         reviewNote: team.reviewNote ?? "",
         submittedCount: metrics.submitted.length,
@@ -919,6 +923,10 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
     criteria,
     team: {
       ...team,
+      documentLinks: parseDocumentLinks(team.documentLinks, {
+        documentName: team.documentName,
+        documentUrl: team.documentUrl,
+      }),
       members: parseMembers(team.teamMembers),
     },
     existingScore,
@@ -1017,6 +1025,10 @@ export async function getTeamPortalData(userId: string) {
       imageUrl: team.imageUrl ?? "",
       documentUrl: team.documentUrl ?? "",
       documentName: team.documentName ?? "",
+      documentLinks: parseDocumentLinks(team.documentLinks, {
+        documentName: team.documentName,
+        documentUrl: team.documentUrl,
+      }),
       submissionStatus: team.submissionStatus,
       submittedAt: team.submittedAt,
       approvedAt: team.approvedAt,
