@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { JudgeScoreCards } from "@/components/admin/judge-score-cards";
+import { ScoringToggleButton } from "@/components/admin/scoring-toggle-button";
 import { Badge } from "@/components/shared/badge";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
 import { PageHeader } from "@/components/shared/page-header";
@@ -40,7 +41,7 @@ export default async function AdminLeaderboardPage({
       />
       <Card>
         <CardContent className="py-4">
-          <form className="flex flex-wrap items-center gap-3">
+          <form className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
             <label htmlFor="competitionId" className="text-sm font-medium text-slate-700">
               {t.competitionLabel}
             </label>
@@ -48,7 +49,7 @@ export default async function AdminLeaderboardPage({
               id="competitionId"
               name="competitionId"
               defaultValue={data.selectedCompetitionId}
-              className="h-10 min-w-[260px] rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 sm:min-w-[260px] sm:w-auto"
             >
               {data.competitions.map((competition) => (
                 <option key={competition.id} value={competition.id}>
@@ -56,7 +57,17 @@ export default async function AdminLeaderboardPage({
                 </option>
               ))}
             </select>
-            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">{t.applyCompetition}</button>
+            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white sm:w-auto">{t.applyCompetition}</button>
+            <ScoringToggleButton
+              isClosed={data.scoringAvailability.scoringClosed}
+              competitionId={data.selectedCompetitionId}
+              labels={{
+                endCompetition: t.endCompetition,
+                continueCompetition: t.continueCompetition,
+                competitionEnded: t.competitionEnded,
+                competitionContinued: t.competitionContinued,
+              }}
+            />
           </form>
         </CardContent>
       </Card>

@@ -17,7 +17,16 @@ const teamInclude = {
       judge: true,
       items: {
         include: {
-          criterion: true,
+          criterion: {
+            include: {
+              subCriteria: true,
+            },
+          },
+          subItems: {
+            include: {
+              subCriterion: true,
+            },
+          },
         },
       },
     },
@@ -40,11 +49,45 @@ function getActiveCompetitionId(settings: { competitionId: string | null } | nul
   return settings?.competitionId ?? null;
 }
 
+function getScoringAvailability(
+  settings: { competitionId: string | null; scoringPaused: boolean; submissionDeadline: Date | null; deadlineOverride: boolean } | null,
+  competition?: { id: string; scoringPaused: boolean; deadlineOverride: boolean } | null,
+) {
+  const scoringPaused = competition?.scoringPaused ?? settings?.scoringPaused ?? false;
+  const deadlineOverride = competition?.deadlineOverride ?? settings?.deadlineOverride ?? false;
+  const deadlineApplies = !competition?.id || !settings?.competitionId || settings.competitionId === competition.id;
+  const submissionDeadline = deadlineApplies ? settings?.submissionDeadline : null;
+
+  if (scoringPaused) {
+    return {
+      scoringClosed: true,
+      scoringClosedReason: "Competition has ended. Scoring is currently closed.",
+    };
+  }
+
+  if (submissionDeadline && submissionDeadline.getTime() <= Date.now() && !deadlineOverride) {
+    return {
+      scoringClosed: true,
+      scoringClosedReason: "The submission deadline has passed. Scoring is currently closed.",
+    };
+  }
+
+  return {
+    scoringClosed: false,
+    scoringClosedReason: "",
+  };
+}
+
 async function resolveCompetitionScope(requestedCompetitionId?: string) {
   const [settings, competitions] = await Promise.all([
     prisma.settings.findUnique({ where: { id: "default" } }),
     prisma.competition.findMany({
       where: { active: true },
+      include: {
+        images: {
+          orderBy: { displayOrder: "asc" },
+        },
+      },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -142,6 +185,16 @@ function getRankedRows(teams: TeamWithRelations[], settings: { judgeScope: "ALL"
                     criterionName: item.criterion.name,
                     numericScore: item.numericScore,
                     comment: item.comment,
+                    subScores: item.subItems
+                      .slice()
+                      .sort((a, b) => a.subCriterion.displayOrder - b.subCriterion.displayOrder)
+                      .map((subItem) => ({
+                        subCriterionName: subItem.subCriterion.name,
+                        numericScore: subItem.numericScore,
+                        weightedValue: subItem.weightedValue,
+                        weight: subItem.subCriterion.weight,
+                        comment: subItem.comment,
+                      })),
                   })) ?? [],
             };
           }),
@@ -300,7 +353,7 @@ export async function getAdminDashboardData() {
 export async function getTeamsManagementData() {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
 
-  const [teams, judges, competitions, categories] = await Promise.all([
+  const [teams, judges, teamAccounts, competitions, categories] = await Promise.all([
     prisma.team.findMany({
       include: teamInclude,
       orderBy: [{ teamCode: "asc" }],
@@ -308,6 +361,11 @@ export async function getTeamsManagementData() {
     prisma.user.findMany({
       where: { role: "JUDGE", active: true },
       select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { role: "TEAM", active: true },
+      select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
     prisma.competition.findMany({
@@ -345,6 +403,7 @@ export async function getTeamsManagementData() {
         competitionName: team.category?.competition?.name ?? "Uncategorized",
         categoryId: team.categoryId ?? "",
         categoryName: team.category?.name ?? "Uncategorized",
+        ownerUserId: team.ownerUserId ?? "",
         ownerEmail: team.ownerUser?.email ?? "",
         projectTitle: team.projectTitle,
         projectDescription: team.projectDescription,
@@ -352,6 +411,8 @@ export async function getTeamsManagementData() {
         teamMembers: team.teamMembers,
         videoUrl: team.videoUrl ?? "",
         imageUrl: team.imageUrl ?? "",
+        documentUrl: team.documentUrl ?? "",
+        documentName: team.documentName ?? "",
         submissionStatus: team.submissionStatus,
         reviewNote: team.reviewNote ?? "",
         submittedCount: metrics.submitted.length,
@@ -362,6 +423,7 @@ export async function getTeamsManagementData() {
       };
     }),
     competitions,
+    teamAccounts,
     categories: categories.map((category) => ({
       id: category.id,
       competitionId: category.competitionId,
@@ -450,6 +512,7 @@ export async function getCommentsReviewData(filters: {
 
 export async function getLeaderboardData(competitionId?: string) {
   const { settings, competitions, selectedCompetitionId } = await resolveCompetitionScope(competitionId);
+  const selectedCompetition = competitions.find((competition) => competition.id === selectedCompetitionId) ?? null;
 
   const [teams, judges, categories] = await Promise.all([
     prisma.team.findMany({
@@ -502,6 +565,7 @@ export async function getLeaderboardData(competitionId?: string) {
 
   return {
     settings,
+    scoringAvailability: getScoringAvailability(settings, selectedCompetition),
     competitions,
     selectedCompetitionId: selectedCompetitionId ?? "",
     overallRows,
@@ -528,6 +592,9 @@ export async function getSettingsPageData(competitionId?: string) {
             id: true,
             name: true,
           },
+        },
+        subCriteria: {
+          orderBy: { displayOrder: "asc" },
         },
       },
       orderBy: [{ category: { displayOrder: "asc" } }, { displayOrder: "asc" }],
@@ -596,6 +663,17 @@ export async function getSettingsPageData(competitionId?: string) {
       weight: criterion.weight,
       displayOrder: criterion.displayOrder,
       active: criterion.active,
+      subCriteria: criterion.subCriteria.map((subCriterion) => ({
+        id: subCriterion.id,
+        criterionId: subCriterion.criterionId,
+        name: subCriterion.name,
+        description: subCriterion.description,
+        minScore: subCriterion.minScore,
+        maxScore: subCriterion.maxScore,
+        weight: subCriterion.weight,
+        displayOrder: subCriterion.displayOrder,
+        active: subCriterion.active,
+      })),
     })),
     categories,
     teams,
@@ -646,7 +724,13 @@ export async function getJudgeDashboardData(userId: string) {
       include: {
         category: {
           include: {
-            competition: true,
+            competition: {
+              include: {
+                images: {
+                  orderBy: { displayOrder: "asc" },
+                },
+              },
+            },
           },
         },
         scores: {
@@ -677,6 +761,14 @@ export async function getJudgeDashboardData(userId: string) {
           {
             id: team.category?.competition?.id ?? "",
             name: team.category?.competition?.name ?? "",
+            description: team.category?.competition?.description ?? null,
+            images:
+              team.category?.competition?.images.map((image) => ({
+                id: image.id,
+                imageUrl: image.imageUrl,
+                imageName: image.imageName,
+                displayOrder: image.displayOrder,
+              })) ?? [],
           },
         ]),
     ).values(),
@@ -766,7 +858,11 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
         scores: {
           where: { judgeId: userId },
           include: {
-            items: true,
+            items: {
+              include: {
+                subItems: true,
+              },
+            },
           },
         },
       },
@@ -779,7 +875,11 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
         },
       },
       include: {
-        items: true,
+        items: {
+          include: {
+            subItems: true,
+          },
+        },
       },
     }),
   ]);
@@ -792,6 +892,12 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
     where: {
       categoryId: team.categoryId,
       active: true,
+    },
+    include: {
+      subCriteria: {
+        where: { active: true },
+        orderBy: { displayOrder: "asc" },
+      },
     },
     orderBy: { displayOrder: "asc" },
   });
@@ -809,6 +915,7 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
 
   return {
     settings,
+    scoringAvailability: getScoringAvailability(settings, team.category?.competition ?? null),
     criteria,
     team: {
       ...team,
@@ -908,6 +1015,8 @@ export async function getTeamPortalData(userId: string) {
       teamMembers: team.teamMembers,
       videoUrl: team.videoUrl ?? "",
       imageUrl: team.imageUrl ?? "",
+      documentUrl: team.documentUrl ?? "",
+      documentName: team.documentName ?? "",
       submissionStatus: team.submissionStatus,
       submittedAt: team.submittedAt,
       approvedAt: team.approvedAt,
@@ -989,8 +1098,3 @@ export function describeSubmissionStatus(status: ApprovalStatus) {
 export function getLastUpdatedLabel(date: Date | string | null | undefined) {
   return formatRelativeTime(date);
 }
-
-
-
-
-

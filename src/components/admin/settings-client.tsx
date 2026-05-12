@@ -5,12 +5,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
+  addCompetitionImageAction,
   createCompetitionAction,
   deleteCategoryAction,
+  deleteCompetitionAction,
+  deleteCompetitionImageAction,
   deleteCriterionAction,
+  deleteCriterionSubItemAction,
   updateSettingsAction,
+  updateCompetitionAction,
   upsertCategoryAction,
   upsertCriterionAction,
+  upsertCriterionSubItemAction,
   upsertUserAccountAction,
 } from "@/actions/team";
 import { useI18n } from "@/components/i18n/language-provider";
@@ -29,6 +35,8 @@ type SettingsValue = {
   showLeaderboard: boolean;
   judgeScope: "ALL" | "ASSIGNED";
   submissionDeadline: Date | null;
+  scoringPaused: boolean;
+  deadlineOverride: boolean;
   exportIncludeComments: boolean;
 };
 
@@ -36,6 +44,26 @@ type Competition = {
   id: string;
   name: string;
   description: string | null;
+  active: boolean;
+  images: CompetitionImage[];
+};
+
+type CompetitionImage = {
+  id: string;
+  imageUrl: string;
+  imageName: string | null;
+  displayOrder: number;
+};
+
+type SubCriterion = {
+  id: string;
+  criterionId: string;
+  name: string;
+  description: string | null;
+  minScore: number;
+  maxScore: number;
+  weight: number;
+  displayOrder: number;
   active: boolean;
 };
 
@@ -50,6 +78,7 @@ type Criterion = {
   weight: number;
   displayOrder: number;
   active: boolean;
+  subCriteria: SubCriterion[];
 };
 
 type Category = {
@@ -105,6 +134,7 @@ export function SettingsClient({
   const t = messages.settingsClient;
   const common = messages.common;
   const initialCompetitionId = selectedCompetitionId || settings?.competitionId || competitions[0]?.id || "";
+  const initialCompetition = competitions.find((competition) => competition.id === initialCompetitionId);
 
   const [settingsForm, setSettingsForm] = useState({
     competitionId: initialCompetitionId,
@@ -120,6 +150,10 @@ export function SettingsClient({
     name: "",
     description: "",
   });
+  const [competitionDetailsForm, setCompetitionDetailsForm] = useState({
+    name: initialCompetition?.name ?? "",
+    description: initialCompetition?.description ?? "",
+  });
 
   const [criterionForm, setCriterionForm] = useState({
     id: "",
@@ -130,6 +164,18 @@ export function SettingsClient({
     maxScore: 100,
     weight: 0,
     displayOrder: criteria.length + 1,
+    active: true,
+  });
+
+  const [subCriterionForm, setSubCriterionForm] = useState({
+    id: "",
+    criterionId: "",
+    name: "",
+    description: "",
+    minScore: 0,
+    maxScore: 100,
+    weight: 0,
+    displayOrder: 1,
     active: true,
   });
 
@@ -182,8 +228,33 @@ export function SettingsClient({
     return criteria.filter((item) => item.categoryId === criteriaFilterCategoryId);
   }, [criteria, criteriaFilterCategoryId]);
 
+  const selectedCompetition = competitions.find((competition) => competition.id === settingsForm.competitionId);
+  const selectedCriterionForSubItems = criteria.find((item) => item.id === subCriterionForm.criterionId);
+  const projectedSubCriterionWeight = useMemo(() => {
+    if (!subCriterionForm.criterionId) {
+      return 0;
+    }
+
+    const activeOthers = criteria
+      .flatMap((item) => item.subCriteria)
+      .filter(
+        (item) =>
+          item.criterionId === subCriterionForm.criterionId &&
+          item.active &&
+          item.id !== subCriterionForm.id,
+      )
+      .reduce((sum, item) => sum + item.weight, 0);
+
+    return activeOthers + (subCriterionForm.active ? Number(subCriterionForm.weight) : 0);
+  }, [criteria, subCriterionForm.active, subCriterionForm.criterionId, subCriterionForm.id, subCriterionForm.weight]);
+
   function switchCompetition(nextCompetitionId: string) {
+    const nextCompetition = competitions.find((competition) => competition.id === nextCompetitionId);
     setSettingsForm((current) => ({ ...current, competitionId: nextCompetitionId }));
+    setCompetitionDetailsForm({
+      name: nextCompetition?.name ?? "",
+      description: nextCompetition?.description ?? "",
+    });
     setCategoryForm({
       id: "",
       competitionId: nextCompetitionId,
@@ -195,6 +266,17 @@ export function SettingsClient({
     setCriterionForm({
       id: "",
       categoryId: "",
+      name: "",
+      description: "",
+      minScore: 0,
+      maxScore: 100,
+      weight: 0,
+      displayOrder: 1,
+      active: true,
+    });
+    setSubCriterionForm({
+      id: "",
+      criterionId: "",
       name: "",
       description: "",
       minScore: 0,
@@ -255,6 +337,66 @@ export function SettingsClient({
     });
   }
 
+  function saveCompetitionDetails() {
+    if (!settingsForm.competitionId) {
+      setMessage(t.selectCompetitionFirst);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await updateCompetitionAction({
+        id: settingsForm.competitionId,
+        name: competitionDetailsForm.name,
+        description: competitionDetailsForm.description,
+      });
+      if (result?.error) {
+        setMessage(result.error);
+        return;
+      }
+
+      setMessage(t.competitionUpdated);
+      router.refresh();
+    });
+  }
+
+  function uploadCompetitionImages(files: FileList | null) {
+    if (!settingsForm.competitionId || !files?.length) {
+      return;
+    }
+
+    startTransition(async () => {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.set("kind", "competitionImage");
+        formData.set("file", file);
+        const response = await fetch("/api/upload/team-asset", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadResult = (await response.json()) as { error?: string; url?: string; name?: string };
+
+        if (uploadResult.error || !uploadResult.url) {
+          setMessage(uploadResult.error ?? t.competitionImageUploadFailed);
+          return;
+        }
+
+        const result = await addCompetitionImageAction({
+          competitionId: settingsForm.competitionId,
+          imageUrl: uploadResult.url,
+          imageName: uploadResult.name ?? file.name,
+        });
+
+        if (result?.error) {
+          setMessage(result.error);
+          return;
+        }
+      }
+
+      setMessage(t.competitionImagesUploaded);
+      router.refresh();
+    });
+  }
+
   function saveCriterion() {
     if (!criterionForm.categoryId) {
       setMessage(t.selectCategoryFirst);
@@ -285,6 +427,40 @@ export function SettingsClient({
         maxScore: 100,
         weight: 0,
         displayOrder: criteria.filter((item) => item.categoryId === criterionForm.categoryId).length + 1,
+        active: true,
+      });
+    });
+  }
+
+  function saveSubCriterion() {
+    if (!subCriterionForm.criterionId) {
+      setMessage(t.selectCriterionFirst);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await upsertCriterionSubItemAction({
+        ...subCriterionForm,
+        minScore: Number(subCriterionForm.minScore),
+        maxScore: Number(subCriterionForm.maxScore),
+        weight: Number(subCriterionForm.weight),
+        displayOrder: Number(subCriterionForm.displayOrder),
+      });
+      if (result?.error) {
+        setMessage(result.error);
+        return;
+      }
+
+      setMessage(t.subCriterionSaved);
+      setSubCriterionForm({
+        id: "",
+        criterionId: subCriterionForm.criterionId,
+        name: "",
+        description: "",
+        minScore: 0,
+        maxScore: 100,
+        weight: 0,
+        displayOrder: (selectedCriterionForSubItems?.subCriteria.length ?? 0) + 1,
         active: true,
       });
     });
@@ -351,6 +527,32 @@ export function SettingsClient({
       displayOrder: item.displayOrder,
       active: item.active,
     });
+    setSubCriterionForm((current) => ({
+      ...current,
+      id: "",
+      criterionId: item.id,
+      name: "",
+      description: "",
+      minScore: item.minScore,
+      maxScore: item.maxScore,
+      weight: 0,
+      displayOrder: item.subCriteria.length + 1,
+      active: true,
+    }));
+  }
+
+  function editSubCriterion(item: SubCriterion) {
+    setSubCriterionForm({
+      id: item.id,
+      criterionId: item.criterionId,
+      name: item.name,
+      description: item.description ?? "",
+      minScore: item.minScore,
+      maxScore: item.maxScore,
+      weight: item.weight,
+      displayOrder: item.displayOrder,
+      active: item.active,
+    });
   }
 
   function editCategory(item: Category) {
@@ -387,6 +589,17 @@ export function SettingsClient({
     });
   }
 
+  function removeSubCriterion(id: string) {
+    if (!window.confirm(t.confirmDeleteSubCriterion)) {
+      return;
+    }
+
+    startTransition(async () => {
+      await deleteCriterionSubItemAction(id);
+      setMessage(t.subCriterionDeleted);
+    });
+  }
+
   function removeCategory(id: string) {
     if (!window.confirm(t.confirmDeleteCategory)) {
       return;
@@ -395,6 +608,47 @@ export function SettingsClient({
     startTransition(async () => {
       await deleteCategoryAction(id);
       setMessage(t.categoryDeleted);
+    });
+  }
+
+  function removeCompetitionImage(id: string) {
+    if (!window.confirm(t.confirmDeleteCompetitionImage)) {
+      return;
+    }
+
+    startTransition(async () => {
+      await deleteCompetitionImageAction(id);
+      setMessage(t.competitionImageDeleted);
+      router.refresh();
+    });
+  }
+
+  function removeCompetition() {
+    if (!settingsForm.competitionId || !window.confirm(t.confirmDeleteCompetition)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteCompetitionAction(settingsForm.competitionId);
+      if (result?.error) {
+        setMessage(result.error);
+        return;
+      }
+
+      const nextCompetitionId = result?.nextCompetitionId ?? "";
+      setMessage(t.competitionDeleted);
+      setCompetitionDetailsForm({ name: "", description: "" });
+      setSettingsForm((current) => ({ ...current, competitionId: nextCompetitionId }));
+
+      const nextParams = new URLSearchParams(searchParams.toString());
+      if (nextCompetitionId) {
+        nextParams.set("competitionId", nextCompetitionId);
+      } else {
+        nextParams.delete("competitionId");
+      }
+
+      router.push(nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname);
+      router.refresh();
     });
   }
 
@@ -449,6 +703,66 @@ export function SettingsClient({
               <Plus className="h-4 w-4" />
               {t.createCompetition}
             </Button>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-slate-950">{t.selectedCompetitionDetails}</p>
+              <p className="mt-1 text-xs text-slate-500">{t.selectedCompetitionDetailsDesc}</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-[1fr_2fr_auto_auto]">
+              <Input
+                placeholder={t.competitionName}
+                value={competitionDetailsForm.name}
+                onChange={(event) => setCompetitionDetailsForm((current) => ({ ...current, name: event.target.value }))}
+                disabled={!settingsForm.competitionId}
+              />
+              <Input
+                placeholder={t.newCompetitionDescriptionPlaceholder}
+                value={competitionDetailsForm.description}
+                onChange={(event) => setCompetitionDetailsForm((current) => ({ ...current, description: event.target.value }))}
+                disabled={!settingsForm.competitionId}
+              />
+              <Button variant="outline" onClick={saveCompetitionDetails} disabled={pending || !settingsForm.competitionId}>
+                {t.saveCompetitionDetails}
+              </Button>
+              <Button variant="danger" onClick={removeCompetition} disabled={pending || !settingsForm.competitionId}>
+                {t.deleteCompetition}
+              </Button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <label className="text-sm font-medium text-slate-700">{t.competitionImages}</label>
+              <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t.uploadCompetitionImages}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  disabled={!settingsForm.competitionId || pending}
+                  className="sr-only"
+                  onChange={(event) => uploadCompetitionImages(event.target.files)}
+                />
+              </label>
+              {selectedCompetition?.images.length ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {selectedCompetition.images.map((image) => (
+                    <div key={image.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      {/* Plain img keeps local uploads and arbitrary image URLs working without image domain config. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={image.imageUrl} alt={image.imageName ?? t.competitionImageAlt} className="h-28 w-full object-cover" />
+                      <div className="space-y-2 p-3">
+                        <p className="truncate text-xs font-medium text-slate-700">{image.imageName ?? image.imageUrl}</p>
+                        <Button variant="ghost" size="sm" onClick={() => removeCompetitionImage(image.id)} className="w-full text-rose-600">
+                          {t.deleteCompetitionImage}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">{t.noCompetitionImages}</p>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -559,7 +873,7 @@ export function SettingsClient({
               {t.activeCategory}
             </label>
             <div className="flex justify-end">
-              <Button onClick={saveCategory} disabled={pending || !settingsForm.competitionId} className="gap-2">
+              <Button onClick={saveCategory} disabled={pending || !settingsForm.competitionId} className="w-full gap-2 sm:w-auto">
                 <Plus className="h-4 w-4" />
                 {t.saveCategory}
               </Button>
@@ -570,12 +884,12 @@ export function SettingsClient({
         <Card>
           <CardHeader title={t.scoringCriteriaTitle} description={t.scoringCriteriaDesc} />
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
               <label className="text-sm font-medium text-slate-700">{t.filterCategory}</label>
               <select
                 value={criteriaFilterCategoryId}
                 onChange={(event) => setCriteriaFilterCategoryId(event.target.value)}
-                className="h-10 min-w-[220px] rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 sm:min-w-[220px] sm:w-auto"
               >
                 <option value="">{t.allCategories}</option>
                 {categories.map((category) => (
@@ -605,6 +919,18 @@ export function SettingsClient({
                       <TD>
                         <div className="font-medium text-slate-950">{item.name}</div>
                         <div className="text-xs text-slate-500">{item.description}</div>
+                        {item.subCriteria.length ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.subCriteria
+                              .slice()
+                              .sort((a, b) => a.displayOrder - b.displayOrder)
+                              .map((subCriterion) => (
+                                <Badge key={subCriterion.id} tone={subCriterion.active ? "blue" : "slate"}>
+                                  {subCriterion.name} {subCriterion.weight}%
+                                </Badge>
+                              ))}
+                          </div>
+                        ) : null}
                       </TD>
                       <TD>
                         {item.minScore} - {item.maxScore}
@@ -680,10 +1006,102 @@ export function SettingsClient({
             </p>
             <Textarea placeholder={t.criterionDescription} value={criterionForm.description} onChange={(event) => setCriterionForm((current) => ({ ...current, description: event.target.value }))} />
             <div className="flex justify-end">
-              <Button onClick={saveCriterion} disabled={pending || !criterionForm.categoryId} className="gap-2">
+              <Button onClick={saveCriterion} disabled={pending || !criterionForm.categoryId} className="w-full gap-2 sm:w-auto">
                 <Plus className="h-4 w-4" />
                 {t.saveCriterion}
               </Button>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-slate-950">{t.subCriteriaTitle}</p>
+                <p className="mt-1 text-xs text-slate-500">{t.subCriteriaDesc}</p>
+              </div>
+              <div className="mb-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.parentCriterion}</label>
+                  <select
+                    value={subCriterionForm.criterionId}
+                    onChange={(event) => {
+                      const nextCriterion = criteria.find((item) => item.id === event.target.value);
+                      setSubCriterionForm((current) => ({
+                        ...current,
+                        id: "",
+                        criterionId: event.target.value,
+                        minScore: nextCriterion?.minScore ?? 0,
+                        maxScore: nextCriterion?.maxScore ?? 100,
+                        displayOrder: (nextCriterion?.subCriteria.length ?? 0) + 1,
+                      }));
+                    }}
+                    className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                  >
+                    <option value="">{t.selectCriterion}</option>
+                    {criteria.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.categoryName} / {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.subCriterionName}</label>
+                  <Input value={subCriterionForm.name} onChange={(event) => setSubCriterionForm((current) => ({ ...current, name: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.displayOrder}</label>
+                  <Input type="number" value={subCriterionForm.displayOrder} onChange={(event) => setSubCriterionForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.weight} (%)</label>
+                  <Input type="number" step="0.01" min={0} max={100} value={subCriterionForm.weight} onChange={(event) => setSubCriterionForm((current) => ({ ...current, weight: Number(event.target.value) }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.minScore}</label>
+                  <Input type="number" value={subCriterionForm.minScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, minScore: Number(event.target.value) }))} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">{t.maxScore}</label>
+                  <Input type="number" value={subCriterionForm.maxScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, maxScore: Number(event.target.value) }))} />
+                </div>
+                <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
+                  <input type="checkbox" checked={subCriterionForm.active} onChange={(event) => setSubCriterionForm((current) => ({ ...current, active: event.target.checked }))} />
+                  {t.activeSubCriterion}
+                </label>
+              </div>
+              <Textarea placeholder={t.subCriterionDescription} value={subCriterionForm.description} onChange={(event) => setSubCriterionForm((current) => ({ ...current, description: event.target.value }))} />
+              <p className={`mt-3 text-xs ${projectedSubCriterionWeight > 100 ? "text-rose-600" : "text-slate-500"}`}>
+                {t.activeSubWeightPreview} {projectedSubCriterionWeight.toFixed(2)}%
+              </p>
+              {selectedCriterionForSubItems?.subCriteria.length ? (
+                <div className="mt-4 space-y-2">
+                  {selectedCriterionForSubItems.subCriteria
+                    .slice()
+                    .sort((a, b) => a.displayOrder - b.displayOrder)
+                    .map((subCriterion) => (
+                      <div key={subCriterion.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-slate-950">{subCriterion.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {subCriterion.minScore} - {subCriterion.maxScore} · {subCriterion.weight}% · {subCriterion.active ? common.statuses.active : common.statuses.inactive}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => editSubCriterion(subCriterion)}>
+                            {common.actions.edit}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => removeSubCriterion(subCriterion.id)}>
+                            <Trash2 className="h-4 w-4 text-rose-600" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+              <div className="mt-4 flex justify-end">
+                <Button onClick={saveSubCriterion} disabled={pending || !subCriterionForm.criterionId} className="w-full gap-2 sm:w-auto">
+                  <Plus className="h-4 w-4" />
+                  {t.saveSubCriterion}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -793,7 +1211,7 @@ export function SettingsClient({
               {t.activeAccount}
             </label>
             <div className="flex justify-end md:col-span-2">
-              <Button onClick={saveAccount} disabled={pending}>
+              <Button onClick={saveAccount} disabled={pending} className="w-full sm:w-auto">
                 {accountForm.id ? t.updateAccount : t.createAccount}
               </Button>
             </div>

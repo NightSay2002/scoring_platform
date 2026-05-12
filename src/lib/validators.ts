@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+function normalizeMemberName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export const teamSchema = z.object({
   id: z.string().optional(),
   teamCode: z.string().min(1, "Team code is required."),
@@ -20,14 +24,50 @@ export const teamSchema = z.object({
     .trim()
     .optional()
     .or(z.literal("")),
+  documentUrl: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal("")),
+  documentName: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal("")),
   submissionStatus: z.enum(["DRAFT", "PENDING", "APPROVED", "REJECTED"]).optional(),
   reviewNote: z.string().optional(),
+}).superRefine((value, context) => {
+  const members = value.teamMembers
+    .split("\n")
+    .map(normalizeMemberName)
+    .filter(Boolean);
+  const duplicates = members.filter((member, index) => members.indexOf(member) !== index);
+
+  if (duplicates.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["teamMembers"],
+      message: "Team member names must be unique.",
+    });
+  }
 });
 
 export const criterionSchema = z.object({
   id: z.string().optional(),
   categoryId: z.string().min(1, "Category is required."),
   name: z.string().min(1, "Criterion name is required."),
+  description: z.string().optional(),
+  minScore: z.coerce.number().int(),
+  maxScore: z.coerce.number().int(),
+  weight: z.coerce.number().min(0).max(100),
+  displayOrder: z.coerce.number().int().nonnegative(),
+  active: z.boolean().default(true),
+});
+
+export const criterionSubItemSchema = z.object({
+  id: z.string().optional(),
+  criterionId: z.string().min(1, "Parent criterion is required."),
+  name: z.string().min(1, "Sub-criterion name is required."),
   description: z.string().optional(),
   minScore: z.coerce.number().int(),
   maxScore: z.coerce.number().int(),
@@ -71,6 +111,12 @@ export const competitionSchema = z.object({
   name: z.string().min(1, "Competition name is required."),
   description: z.string().optional(),
   active: z.boolean().default(true),
+});
+
+export const competitionImageSchema = z.object({
+  competitionId: z.string().min(1, "Competition is required."),
+  imageUrl: z.string().min(1, "Image URL is required."),
+  imageName: z.string().optional(),
 });
 
 export const userAccountSchema = z.object({

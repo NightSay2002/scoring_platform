@@ -15,6 +15,13 @@ type JudgeScore = {
     criterionName: string;
     numericScore: number;
     comment: string;
+    subScores: Array<{
+      subCriterionName: string;
+      numericScore: number;
+      weightedValue: number;
+      weight: number;
+      comment: string;
+    }>;
   }>;
 };
 
@@ -140,7 +147,7 @@ export function JudgeScoreCards({
             className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div className="flex flex-col items-start justify-between gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:px-5">
               <h3 className="text-base font-semibold text-slate-900">
                 {labels.detailsTitle}: {selectedJudge.judgeName}
               </h3>
@@ -183,6 +190,26 @@ export function JudgeScoreCards({
                       <p className="font-semibold text-slate-900">
                         {item.criterionName}: {item.numericScore.toFixed(0)}
                       </p>
+                      {item.subScores.length ? (
+                        <div className="mt-3 space-y-2 border-l-2 border-slate-200 pl-3">
+                          {item.subScores.map((subItem) => (
+                            <div
+                              key={`${selectedJudge.judgeName}-${item.criterionName}-${subItem.subCriterionName}`}
+                              className="rounded-lg bg-slate-50 p-2"
+                            >
+                              <p className="font-semibold text-slate-800">
+                                {subItem.subCriterionName}: {subItem.numericScore.toFixed(0)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {subItem.weight}% · {subItem.weightedValue.toFixed(2)}
+                              </p>
+                              {subItem.comment ? (
+                                <p className="mt-1 text-xs text-slate-600">{subItem.comment}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">{labels.criterionComment}</p>
                       <p className="mt-1 text-slate-700">{item.comment || labels.noComment}</p>
                     </div>

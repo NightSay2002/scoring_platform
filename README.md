@@ -192,7 +192,7 @@ Demo credentials:
 ```bash
 npm install
 npm run db:setup
-npm run dev
+npm run dev -- -p 9747
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
@@ -213,3 +213,4 @@ Open [http://localhost:3000](http://localhost:3000).
 - Default local MVP uses SQLite (`DATABASE_URL=file:./prisma/dev.db`).
 - If Prisma client generation fails on Windows with `EPERM` for query engine rename, ensure no process is holding `node_modules/.prisma/client/*` and rerun `npm run db:generate`.
 - CSV export is implemented; XLSX export is not included yet.
+rm -rf .nextnpm run dev -- -p 9747

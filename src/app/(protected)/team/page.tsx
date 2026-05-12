@@ -56,7 +56,7 @@ export default async function TeamDashboardPage() {
       <Card>
         <CardHeader title={t.currentSubmissionTitle} description={t.currentSubmissionDesc} />
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h2 className="text-xl font-semibold text-slate-950">{data.team.teamName}</h2>
             <Badge tone={tone}>{common.statuses[data.team.submissionStatus.toLowerCase() as "draft" | "pending" | "approved" | "rejected"]}</Badge>
           </div>
@@ -83,4 +83,3 @@ export default async function TeamDashboardPage() {
     </div>
   );
 }
-

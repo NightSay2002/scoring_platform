@@ -15,8 +15,21 @@ CREATE TABLE "Competition" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "active" BOOLEAN NOT NULL DEFAULT true,
+    "scoringPaused" BOOLEAN NOT NULL DEFAULT false,
+    "deadlineOverride" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE "CompetitionImage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "competitionId" TEXT NOT NULL,
+    "imageUrl" TEXT NOT NULL,
+    "imageName" TEXT,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "CompetitionImage_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "Competition" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE "Category" (
@@ -41,6 +54,8 @@ CREATE TABLE "Team" (
     "teamMembers" TEXT NOT NULL,
     "videoUrl" TEXT,
     "imageUrl" TEXT,
+    "documentUrl" TEXT,
+    "documentName" TEXT,
     "status" TEXT NOT NULL DEFAULT 'ACTIVE',
     "categoryId" TEXT,
     "ownerUserId" TEXT,
@@ -80,6 +95,21 @@ CREATE TABLE "Criterion" (
     CONSTRAINT "Criterion_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE "CriterionSubItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "criterionId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "minScore" INTEGER NOT NULL,
+    "maxScore" INTEGER NOT NULL,
+    "weight" REAL NOT NULL DEFAULT 0,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "CriterionSubItem_criterionId_fkey" FOREIGN KEY ("criterionId") REFERENCES "Criterion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE "Score" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "teamId" TEXT NOT NULL,
@@ -108,6 +138,19 @@ CREATE TABLE "ScoreItem" (
     CONSTRAINT "ScoreItem_criterionId_fkey" FOREIGN KEY ("criterionId") REFERENCES "Criterion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE "ScoreSubItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "scoreItemId" TEXT NOT NULL,
+    "subCriterionId" TEXT NOT NULL,
+    "numericScore" REAL NOT NULL,
+    "weightedValue" REAL NOT NULL,
+    "comment" TEXT NOT NULL DEFAULT '',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ScoreSubItem_scoreItemId_fkey" FOREIGN KEY ("scoreItemId") REFERENCES "ScoreItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ScoreSubItem_subCriterionId_fkey" FOREIGN KEY ("subCriterionId") REFERENCES "CriterionSubItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE "Settings" (
     "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
     "competitionId" TEXT,
@@ -117,6 +160,8 @@ CREATE TABLE "Settings" (
     "showLeaderboard" BOOLEAN NOT NULL DEFAULT false,
     "judgeScope" TEXT NOT NULL DEFAULT 'ALL',
     "submissionDeadline" DATETIME,
+    "scoringPaused" BOOLEAN NOT NULL DEFAULT false,
+    "deadlineOverride" BOOLEAN NOT NULL DEFAULT false,
     "exportIncludeComments" BOOLEAN NOT NULL DEFAULT true,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "Settings_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "Competition" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -140,5 +185,7 @@ CREATE UNIQUE INDEX "Team_teamCode_key" ON "Team"("teamCode");
 CREATE UNIQUE INDEX "Team_ownerUserId_key" ON "Team"("ownerUserId");
 CREATE UNIQUE INDEX "TeamAssignment_teamId_judgeId_key" ON "TeamAssignment"("teamId", "judgeId");
 CREATE UNIQUE INDEX "Criterion_categoryId_name_key" ON "Criterion"("categoryId", "name");
+CREATE UNIQUE INDEX "CriterionSubItem_criterionId_name_key" ON "CriterionSubItem"("criterionId", "name");
 CREATE UNIQUE INDEX "Score_teamId_judgeId_key" ON "Score"("teamId", "judgeId");
 CREATE UNIQUE INDEX "ScoreItem_scoreId_criterionId_key" ON "ScoreItem"("scoreId", "criterionId");
+CREATE UNIQUE INDEX "ScoreSubItem_scoreItemId_subCriterionId_key" ON "ScoreSubItem"("scoreItemId", "subCriterionId");

@@ -15,6 +15,7 @@ export default async function AdminTeamsPage() {
         teams={data.teams}
         competitions={data.competitions}
         categories={data.categories}
+        teamAccounts={data.teamAccounts}
         judges={data.judges}
         judgeScope={data.judgeScope}
       />

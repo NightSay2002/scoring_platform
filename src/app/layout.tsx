@@ -20,8 +20,8 @@ export default async function RootLayout({
   const locale = normalizeLocale(cookieStore.get(LOCALE_COOKIE_NAME)?.value);
 
   return (
-    <html lang={locale === "zh" ? "zh-Hant" : "en"}>
-      <body>
+    <html lang={locale === "zh" ? "zh-Hant" : "en"} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>
       </body>
     </html>

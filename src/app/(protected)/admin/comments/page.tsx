@@ -94,7 +94,9 @@ export default async function AdminCommentsPage({
               <option value="SUBMITTED">{messages.submitted}</option>
               <option value="EDITED">{messages.edited}</option>
             </select>
-            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">{messages.applyFilters}</button>
+            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white md:col-span-5 md:justify-self-end">
+              {messages.applyFilters}
+            </button>
           </form>
         </CardContent>
       </Card>

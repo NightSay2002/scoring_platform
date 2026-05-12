@@ -76,10 +76,10 @@ export default async function AdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader title={t.recentActivityTitle} description={t.recentActivityDesc} />
-          <CardContent className="space-y-4">
-            {data.recentAudits.map((audit) => (
-              <div key={audit.id} className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex items-center justify-between gap-4">
+        <CardContent className="space-y-4">
+          {data.recentAudits.map((audit) => (
+            <div key={audit.id} className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-4">
                   <p className="font-medium capitalize text-slate-950">{audit.action.replaceAll("_", " ")}</p>
                   <p className="text-xs text-slate-500">{formatRelativeTime(audit.createdAt, locale)}</p>
                 </div>

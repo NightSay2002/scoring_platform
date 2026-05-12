@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { animate, motion, useDragControls, useMotionValue } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
 import { LanguageToggle } from "@/components/i18n/language-toggle";
@@ -36,7 +36,19 @@ const mobileOverlayVariants = {
 
 export function LoginExperience() {
   const [revealed, setRevealed] = useState(false);
+  const mobileSheetY = useMotionValue(0);
+  const mobileDragControls = useDragControls();
   const { messages } = useI18n();
+
+  useEffect(() => {
+    const controls = animate(mobileSheetY, 0, {
+      type: "spring",
+      stiffness: 360,
+      damping: 34,
+    });
+
+    return () => controls.stop();
+  }, [revealed, mobileSheetY]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#090b10]">
@@ -80,12 +92,6 @@ export function LoginExperience() {
                   <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
                 </div>
                 <LoginForm revealed={revealed} />
-                <div className="mt-8 rounded-[1.5rem] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 text-xs leading-6 text-[#b6b1a8]">
-                  <p className="font-medium text-[#f3efea]">{messages.login.demoAccess}</p>
-                  <p className="mt-2">{messages.login.demoAdmin}: <span className="font-mono text-[#f3efe8]">admin@techscore.local</span></p>
-                  <p>{messages.login.demoJudge}: <span className="font-mono text-[#f3efe8]">maya@techscore.local</span></p>
-                  <p>{messages.login.demoTeam}: <span className="font-mono text-[#f3efe8]">team1@techscore.local</span></p>
-                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -105,11 +111,47 @@ export function LoginExperience() {
         className="fixed inset-x-0 bottom-0 top-0 z-40 lg:hidden"
         style={{ pointerEvents: revealed ? "auto" : "none" }}
       >
-        <div className="absolute inset-0 bg-black/48 backdrop-blur-sm" />
-        <div className="absolute inset-x-0 bottom-0 top-[18svh] overflow-hidden rounded-t-[2.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(17,18,21,0.96),rgba(8,9,12,0.99))] shadow-[0_-24px_70px_rgba(0,0,0,0.55)]">
+        <button
+          type="button"
+          aria-label="Close sign in form"
+          className="absolute inset-0 bg-black/48 backdrop-blur-sm"
+          onClick={() => setRevealed(false)}
+        />
+        <motion.div
+          drag="y"
+          dragControls={mobileDragControls}
+          dragListener={false}
+          dragConstraints={{ top: 0, bottom: 220 }}
+          dragElastic={0.12}
+          dragMomentum={false}
+          onDragEnd={(_, info) => {
+            const shouldClose = info.offset.y > 96 || info.velocity.y > 760;
+
+            if (shouldClose) {
+              setRevealed(false);
+              mobileSheetY.set(0);
+              return;
+            }
+
+            animate(mobileSheetY, 0, {
+              type: "spring",
+              stiffness: 380,
+              damping: 35,
+            });
+          }}
+          style={{ y: mobileSheetY }}
+          className="absolute inset-x-0 bottom-0 top-[18svh] overflow-hidden rounded-t-[2.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(17,18,21,0.96),rgba(8,9,12,0.99))] shadow-[0_-24px_70px_rgba(0,0,0,0.55)]"
+        >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.18),rgba(255,255,255,0.08)_14%,rgba(255,255,255,0.025)_30%,transparent_56%)]" />
           <div className="mx-auto flex h-full max-w-xl flex-col overflow-y-auto px-6 pb-10 pt-6">
-            <div className="mx-auto mb-5 h-1.5 w-14 rounded-full bg-white/12" />
+            <button
+              type="button"
+              aria-label="Drag down to close sign in form"
+              onPointerDown={(event) => mobileDragControls.start(event)}
+              className="mx-auto mb-4 flex h-8 w-24 touch-none items-center justify-center"
+            >
+              <span className="h-1.5 w-14 rounded-full bg-white/12" />
+            </button>
             <div className="mb-8 flex flex-col items-center text-center">
               <div className="mb-4 rounded-2xl border border-white/10 bg-white/6 p-3 text-[#f0ebe1]">
                 <ShieldCheck className="h-5 w-5" />
@@ -118,14 +160,8 @@ export function LoginExperience() {
               <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
             </div>
             <LoginForm revealed={revealed} />
-            <div className="mt-8 rounded-[1.5rem] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 text-xs leading-6 text-[#b6b1a8]">
-              <p className="font-medium text-[#f3efea]">{messages.login.demoAccess}</p>
-              <p className="mt-2">{messages.login.demoAdmin}: <span className="font-mono text-[#f3efe8]">admin@techscore.local</span></p>
-              <p>{messages.login.demoJudge}: <span className="font-mono text-[#f3efe8]">maya@techscore.local</span></p>
-              <p>{messages.login.demoTeam}: <span className="font-mono text-[#f3efe8]">team1@techscore.local</span></p>
-            </div>
           </div>
-        </div>
+        </motion.div>
       </motion.div>
     </div>
   );

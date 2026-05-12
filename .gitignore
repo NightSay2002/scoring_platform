@@ -24,6 +24,21 @@
 .DS_Store
 *.pem
 
+# local sqlite/runtime files
+prisma/*.db-shm
+prisma/*.db-wal
+
+# user uploaded runtime assets
+public/uploads/**
+!public/uploads/
+!public/uploads/.gitkeep
+!public/uploads/avatars/
+!public/uploads/avatars/.gitkeep
+!public/uploads/competitions/
+!public/uploads/competitions/.gitkeep
+!public/uploads/documents/
+!public/uploads/documents/.gitkeep
+
 # debug
 npm-debug.log*
 yarn-debug.log*

@@ -1,18 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 
-import { loginAction } from "@/actions/auth";
 import { useI18n } from "@/components/i18n/language-provider";
 import { Button } from "@/components/shared/button";
 import { Input } from "@/components/shared/input";
 import { cn } from "@/lib/utils";
-
-const initialState = {
-  error: "",
-};
 
 export function LoginForm({
   revealed,
@@ -21,9 +18,11 @@ export function LoginForm({
   revealed?: boolean;
   className?: string;
 }) {
-  const [state, action, pending] = useActionState(loginAction, initialState);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const identifierRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const { locale, messages } = useI18n();
   const resetSubject = encodeURIComponent(messages.login.forgotPasswordSubject);
 
@@ -39,8 +38,42 @@ export function LoginForm({
     return () => window.clearTimeout(timeout);
   }, [revealed]);
 
+  async function handleSubmit(formData: FormData) {
+    const identifier = String(formData.get("identifier") ?? "").trim();
+    const password = String(formData.get("password") ?? "").trim();
+
+    setPending(true);
+    setError("");
+
+    try {
+      const result = await signIn("credentials", {
+        identifier,
+        password,
+        redirect: false,
+      });
+
+      if (!result || result.error) {
+        setError(messages.login.invalidCredentials);
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError(messages.login.invalidCredentials);
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <form action={action} className={cn("space-y-5", className)}>
+    <form
+      className={cn("space-y-5", className)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleSubmit(new FormData(event.currentTarget));
+      }}
+    >
       <input type="hidden" name="locale" value={locale} />
       <div className="space-y-2">
         <label className="text-sm font-medium text-[#d8d0c1]" htmlFor="identifier">
@@ -53,7 +86,10 @@ export function LoginForm({
           placeholder={messages.login.emailPlaceholder}
           required
           autoComplete="username"
-          aria-invalid={Boolean(state?.error)}
+          aria-invalid={Boolean(error)}
+          onBlur={(event) => {
+            event.currentTarget.value = event.currentTarget.value.trim();
+          }}
           className="h-12 rounded-2xl border border-white/10 bg-[linear-gradient(90deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] px-4 text-base text-[#111111] placeholder:text-[#6f6a62] focus:border-white/28 focus:bg-[linear-gradient(90deg,rgba(255,255,255,0.16),rgba(255,255,255,0.07))] focus:ring-white/10"
         />
       </div>
@@ -69,7 +105,10 @@ export function LoginForm({
             placeholder={messages.login.passwordPlaceholder}
             required
             autoComplete="current-password"
-            aria-invalid={Boolean(state?.error)}
+            aria-invalid={Boolean(error)}
+            onBlur={(event) => {
+              event.currentTarget.value = event.currentTarget.value.trim();
+            }}
             className="h-12 rounded-2xl border border-white/10 bg-[linear-gradient(90deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] px-4 pr-12 text-base text-[#111111] placeholder:text-[#6f6a62] focus:border-white/28 focus:bg-[linear-gradient(90deg,rgba(255,255,255,0.16),rgba(255,255,255,0.07))] focus:ring-white/10"
           />
           <button
@@ -98,12 +137,12 @@ export function LoginForm({
           {messages.login.forgotPassword}
         </Link>
       </div>
-      {state?.error ? (
+      {error ? (
         <div
           role="alert"
           className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
         >
-          {state.error}
+          {error}
         </div>
       ) : null}
       <Button

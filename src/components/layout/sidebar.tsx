@@ -40,6 +40,30 @@ const teamItems: NavItem[] = [
   { href: "/team/results", labelKey: "reviewStatus", icon: FolderOpen },
 ];
 
+function getRoleItems(role: "ADMIN" | "JUDGE" | "TEAM") {
+  return role === "ADMIN" ? adminItems : role === "JUDGE" ? judgeItems : teamItems;
+}
+
+function getRoleRootHref(role: "ADMIN" | "JUDGE" | "TEAM") {
+  return role === "ADMIN" ? "/admin" : role === "JUDGE" ? "/judge" : "/team";
+}
+
+function isItemActive(
+  pathname: string,
+  href: string,
+  roleRootHref: string,
+) {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href === roleRootHref) {
+    return false;
+  }
+
+  return pathname.startsWith(`${href}/`);
+}
+
 export function Sidebar({
   role,
   competitionName,
@@ -49,10 +73,11 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const { messages } = useI18n();
-  const items = role === "ADMIN" ? adminItems : role === "JUDGE" ? judgeItems : teamItems;
+  const items = getRoleItems(role);
+  const roleRootHref = getRoleRootHref(role);
 
   return (
-    <aside className="flex min-h-screen w-full max-w-[260px] flex-col border-r border-slate-200 bg-slate-950 text-slate-100">
+    <aside className="hidden min-h-screen w-full max-w-[260px] flex-col border-r border-slate-200 bg-slate-950 text-slate-100 lg:flex">
       <div className="border-b border-slate-800 px-6 py-6">
         <p className="text-xs uppercase tracking-[0.24em] text-sky-300">TechScore</p>
         <h1 className="mt-2 text-lg font-semibold leading-tight">{competitionName}</h1>
@@ -62,7 +87,7 @@ export function Sidebar({
       </div>
       <nav className="flex-1 space-y-1 px-4 py-5">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = isItemActive(pathname, item.href, roleRootHref);
           const Icon = item.icon;
 
           return (
@@ -81,5 +106,41 @@ export function Sidebar({
         })}
       </nav>
     </aside>
+  );
+}
+
+export function MobileRoleNav({
+  role,
+}: {
+  role: "ADMIN" | "JUDGE" | "TEAM";
+}) {
+  const pathname = usePathname();
+  const { messages } = useI18n();
+  const items = getRoleItems(role);
+  const roleRootHref = getRoleRootHref(role);
+
+  return (
+    <nav className="flex gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:thin] lg:hidden">
+      {items.map((item) => {
+        const active = isItemActive(pathname, item.href, roleRootHref);
+        const Icon = item.icon;
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition",
+              active
+                ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {messages.sidebar.nav[item.labelKey]}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

@@ -106,14 +106,14 @@ export default async function JudgeDashboardPage() {
         <CardHeader title={t.recentActivityTitle} description={t.recentActivityDesc} />
         <CardContent className="space-y-4">
           {data.recentScores.map((score) => (
-            <div key={score.id} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+            <div key={score.id} className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center">
               <div>
                 <div className="font-medium text-slate-950">{score.team.teamName}</div>
                 <div className="text-sm text-slate-500">
                   {score.team.category?.competition?.name ?? common.labels.notSet} / {score.team.category?.name ?? common.labels.uncategorized} · {score.team.projectTitle}
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-left sm:text-right">
                 <Badge tone={score.status === "DRAFT" ? "amber" : score.status === "EDITED" ? "blue" : "green"}>
                   {messages.common.statuses[score.status.toLowerCase() as "draft" | "submitted" | "edited"]}
                 </Badge>

@@ -20,20 +20,22 @@ export function Header({
   const label = messages.header.role[role];
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4 lg:px-6">
       <div className="space-y-1">
-        <p className="text-sm text-slate-500">{messages.header.signedInAs}</p>
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-slate-950">{userName}</h2>
+        <p className="text-xs text-slate-500 sm:text-sm">{messages.header.signedInAs}</p>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <h2 className="max-w-[52vw] truncate text-base font-semibold text-slate-950 sm:max-w-none sm:text-lg">
+            {userName}
+          </h2>
           <Badge tone={tone}>{label}</Badge>
         </div>
       </div>
       <div className="flex items-center gap-3">
         <LanguageToggle />
         <form action={logoutAction}>
-          <Button type="submit" variant="outline" className="gap-2">
+          <Button type="submit" variant="outline" className="gap-2 px-3 sm:px-4">
             <LogOut className="h-4 w-4" />
-            {messages.header.signOut}
+            <span className="hidden sm:inline">{messages.header.signOut}</span>
           </Button>
         </form>
       </div>

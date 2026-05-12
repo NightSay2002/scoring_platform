@@ -63,6 +63,8 @@ model Team {
   teamMembers        String
   videoUrl           String?
   imageUrl           String?
+  documentUrl        String?
+  documentName       String?
   status             TeamStatus       @default(ACTIVE)
   categoryId         String?
   ownerUserId        String?          @unique
@@ -85,10 +87,24 @@ model Competition {
   name        String     @unique
   description String?
   active      Boolean    @default(true)
+  scoringPaused Boolean  @default(false)
+  deadlineOverride Boolean @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   categories  Category[]
   settings    Settings[]
+  images      CompetitionImage[]
+}
+
+model CompetitionImage {
+  id            String      @id @default(cuid())
+  competitionId String
+  imageUrl      String
+  imageName     String?
+  displayOrder  Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
 }
 
 model Category {
@@ -132,8 +148,27 @@ model Criterion {
   updatedAt    DateTime    @updatedAt
   category     Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   scoreItems   ScoreItem[]
+  subCriteria  CriterionSubItem[]
 
   @@unique([categoryId, name])
+}
+
+model CriterionSubItem {
+  id           String      @id @default(cuid())
+  criterionId  String
+  name         String
+  description  String?
+  minScore     Int
+  maxScore     Int
+  weight       Float       @default(0)
+  displayOrder Int         @default(0)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  criterion    Criterion   @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  scoreSubItems ScoreSubItem[]
+
+  @@unique([criterionId, name])
 }
 
 model Score {
@@ -166,8 +201,24 @@ model ScoreItem {
   updatedAt     DateTime  @updatedAt
   score         Score     @relation(fields: [scoreId], references: [id], onDelete: Cascade)
   criterion     Criterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  subItems      ScoreSubItem[]
 
   @@unique([scoreId, criterionId])
+}
+
+model ScoreSubItem {
+  id             String           @id @default(cuid())
+  scoreItemId    String
+  subCriterionId String
+  numericScore   Float
+  weightedValue  Float
+  comment        String           @default("")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  scoreItem      ScoreItem        @relation(fields: [scoreItemId], references: [id], onDelete: Cascade)
+  subCriterion   CriterionSubItem @relation(fields: [subCriterionId], references: [id], onDelete: Cascade)
+
+  @@unique([scoreItemId, subCriterionId])
 }
 
 model Settings {
@@ -179,6 +230,8 @@ model Settings {
   showLeaderboard       Boolean    @default(false)
   judgeScope            JudgeScope @default(ALL)
   submissionDeadline    DateTime?
+  scoringPaused         Boolean    @default(false)
+  deadlineOverride      Boolean    @default(false)
   exportIncludeComments Boolean    @default(true)
   updatedAt             DateTime   @updatedAt
   competition           Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)

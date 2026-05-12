@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Save, Send } from "lucide-react";
+import { FileText, Image as ImageIcon, Save, Send, Upload } from "lucide-react";
 
 import { saveTeamDraftAction, submitTeamForApprovalAction } from "@/actions/team";
 import { useI18n } from "@/components/i18n/language-provider";
@@ -9,8 +9,8 @@ import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
 import { Input } from "@/components/shared/input";
+import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
-import { formatRelativeTime } from "@/lib/utils";
 
 type Category = {
   id: string;
@@ -36,6 +36,8 @@ type TeamSubmission = {
   teamMembers: string;
   videoUrl: string;
   imageUrl: string;
+  documentUrl: string;
+  documentName: string;
   submissionStatus: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote: string;
   updatedAt: Date;
@@ -64,10 +66,14 @@ export function TeamSubmissionForm({
     teamMembers: team.teamMembers,
     videoUrl: team.videoUrl,
     imageUrl: team.imageUrl,
+    documentUrl: team.documentUrl,
+    documentName: team.documentName,
   });
   const [submissionStatus, setSubmissionStatus] = useState(team.submissionStatus);
   const [updatedAt, setUpdatedAt] = useState(team.updatedAt.toISOString());
   const [message, setMessage] = useState("");
+  const [avatarFileName, setAvatarFileName] = useState("");
+  const [documentFileName, setDocumentFileName] = useState(team.documentName);
   const [pending, startTransition] = useTransition();
   const filteredCategories = useMemo(
     () => categories.filter((category) => !form.competitionId || category.competitionId === form.competitionId),
@@ -116,6 +122,43 @@ export function TeamSubmissionForm({
     });
   }
 
+  function handleUpload(kind: "avatar" | "document", file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    if (kind === "avatar") {
+      setAvatarFileName(file.name);
+    } else {
+      setDocumentFileName(file.name);
+    }
+
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("kind", kind);
+      formData.set("file", file);
+      const response = await fetch("/api/upload/team-asset", {
+        method: "POST",
+        body: formData,
+      });
+      const result = (await response.json()) as { error?: string; url?: string; name?: string };
+      if (result?.error || !result?.url) {
+        setMessage(result?.error ?? t.uploadFailed);
+        return;
+      }
+
+      const uploadedUrl = result.url;
+      const uploadedName = result.name ?? file.name;
+      setForm((current) => ({
+        ...current,
+        ...(kind === "avatar"
+          ? { imageUrl: uploadedUrl }
+          : { documentUrl: uploadedUrl, documentName: uploadedName }),
+      }));
+      setMessage(t.uploaded);
+    });
+  }
+
   function handleSubmit() {
     if (!window.confirm(t.confirmSubmit)) {
       return;
@@ -152,7 +195,9 @@ export function TeamSubmissionForm({
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">{t.lastUpdated}</p>
-            <p className="mt-2 text-sm font-medium text-slate-950">{formatRelativeTime(updatedAt, locale)}</p>
+            <p className="mt-2 text-sm font-medium text-slate-950">
+              <RelativeTime date={updatedAt} locale={locale} />
+            </p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">{t.adminReview}</p>
@@ -240,13 +285,42 @@ export function TeamSubmissionForm({
             <Input value={form.imageUrl} onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))} disabled={locked || pending} />
           </div>
         </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.avatarUpload}</label>
+            <p className="text-xs text-slate-500">{t.avatarUploadHelp}</p>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              <ImageIcon className="h-4 w-4" />
+              {t.uploadAvatar}
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={locked || pending} className="sr-only" onChange={(event) => handleUpload("avatar", event.target.files?.[0] ?? null)} />
+            </label>
+            {avatarFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {avatarFileName}</p> : null}
+            {form.imageUrl ? <p className="break-all text-xs text-slate-500">{form.imageUrl}</p> : null}
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.documentUpload}</label>
+            <p className="text-xs text-slate-500">{t.documentUploadHelp}</p>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              <Upload className="h-4 w-4" />
+              {t.uploadDocument}
+              <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" disabled={locked || pending} className="sr-only" onChange={(event) => handleUpload("document", event.target.files?.[0] ?? null)} />
+            </label>
+            {documentFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {documentFileName}</p> : null}
+            {form.documentUrl ? (
+              <a href={form.documentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 break-all text-xs font-medium text-sky-700">
+                <FileText className="h-4 w-4 shrink-0" />
+                {form.documentName || form.documentUrl}
+              </a>
+            ) : null}
+          </div>
+        </div>
         {message ? <p className="text-sm text-slate-600">{message}</p> : null}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" className="gap-2" onClick={handleDraftSave} disabled={locked || pending}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={handleDraftSave} disabled={locked || pending}>
             <Save className="h-4 w-4" />
             {pending ? t.saving : t.saveDraft}
           </Button>
-          <Button className="gap-2" onClick={handleSubmit} disabled={locked || pending}>
+          <Button className="w-full gap-2 sm:w-auto" onClick={handleSubmit} disabled={locked || pending}>
             <Send className="h-4 w-4" />
             {pending ? t.submitting : t.submitForApproval}
           </Button>

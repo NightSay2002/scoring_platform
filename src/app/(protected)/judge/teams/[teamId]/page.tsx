@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download, Image as ImageIcon } from "lucide-react";
 
 import { auth } from "@/auth";
 import { Badge } from "@/components/shared/badge";
@@ -36,7 +36,7 @@ export default async function JudgeScoringPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/judge/teams" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
           <ArrowLeft className="h-4 w-4" />
           {t.backToTeams}
@@ -65,8 +65,8 @@ export default async function JudgeScoringPage({
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.teamMembers}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {data.team.members.map((member) => (
-                    <Badge key={member} tone="slate">
+                  {data.team.members.map((member, index) => (
+                    <Badge key={`${member}-${index}`} tone="slate">
                       {member}
                     </Badge>
                   ))}
@@ -76,6 +76,61 @@ export default async function JudgeScoringPage({
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.description}</p>
                 <p className="mt-2 leading-7">{data.team.projectDescription}</p>
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader title={t.teamAttachmentsTitle} description={t.teamAttachmentsDesc} />
+            <CardContent className="space-y-4">
+              {data.team.imageUrl ? (
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{t.submittedImage}</p>
+                  <a href={data.team.imageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                    {/* Keep a plain img so uploaded/local and arbitrary external URLs both render for judges. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={data.team.imageUrl}
+                      alt={`${data.team.teamName} submitted image`}
+                      className="max-h-72 w-full object-contain"
+                    />
+                  </a>
+                  <Link
+                    href={data.team.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    {t.viewImage}
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  {t.noSubmittedImage}
+                </div>
+              )}
+
+              {data.team.documentUrl ? (
+                <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{t.submittedFile}</p>
+                  <p className="break-all text-sm font-medium text-slate-950">
+                    {data.team.documentName || data.team.documentUrl}
+                  </p>
+                  <Link
+                    href={data.team.documentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t.downloadFile}
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  {t.noSubmittedFile}
+                </div>
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -102,6 +157,8 @@ export default async function JudgeScoringPage({
           criteria={data.criteria}
           existingScore={data.existingScore}
           allowEditAfterSubmit={data.settings?.allowEditAfterSubmit ?? true}
+          scoringClosed={data.scoringAvailability.scoringClosed}
+          scoringClosedReason={data.scoringAvailability.scoringClosedReason}
           navigation={data.navigation}
         />
       </div>

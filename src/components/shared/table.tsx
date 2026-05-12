@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export function Table({ children }: { children: React.ReactNode }) {
-  return <div className="overflow-x-auto">{children}</div>;
+  return <div className="overflow-x-auto [scrollbar-width:thin]">{children}</div>;
 }
 
 export function DataTable({
@@ -11,7 +11,7 @@ export function DataTable({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <table className={cn("min-w-full divide-y divide-slate-200 text-sm", className)}>{children}</table>;
+  return <table className={cn("min-w-[700px] divide-y divide-slate-200 text-sm", className)}>{children}</table>;
 }
 
 export function THead({ children }: { children: React.ReactNode }) {

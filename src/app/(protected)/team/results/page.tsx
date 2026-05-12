@@ -37,7 +37,7 @@ export default async function TeamResultsPage() {
           <CardHeader title={t.judgeActivityTitle} description={t.judgeActivityDesc} />
           <CardContent className="space-y-3">
             {data.team.scores.map((score) => (
-              <div key={score.id} className="flex items-center justify-between rounded-2xl border border-slate-200 p-4">
+              <div key={score.id} className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-medium text-slate-950">{score.judgeName}</p>
                   <p className="text-sm text-slate-500">{t.averageScore} {score.averageScore.toFixed(2)}</p>

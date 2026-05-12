@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { LoginExperienceMount } from "@/components/auth/login-experience-mount";
+import { LoginClientShell } from "@/components/auth/login-client-shell";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -10,5 +10,5 @@ export default async function LoginPage() {
     redirect(session.user.role === "ADMIN" ? "/admin" : session.user.role === "JUDGE" ? "/judge" : "/team");
   }
 
-  return <LoginExperienceMount />;
+  return <LoginClientShell />;
 }

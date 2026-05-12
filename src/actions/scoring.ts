@@ -17,9 +17,38 @@ const scorePayloadSchema = z.object({
       criterionId: z.string().min(1),
       numericScore: z.number(),
       comment: z.string().default(""),
+      subItems: z
+        .array(
+          z.object({
+            subCriterionId: z.string().min(1),
+            numericScore: z.number(),
+            comment: z.string().default(""),
+          }),
+        )
+        .optional(),
     }),
   ),
 });
+
+function getScoringClosedMessage(
+  settings: { competitionId: string | null; scoringPaused: boolean; submissionDeadline: Date | null; deadlineOverride: boolean } | null,
+  competition?: { id: string; scoringPaused: boolean; deadlineOverride: boolean } | null,
+) {
+  const scoringPaused = competition?.scoringPaused ?? settings?.scoringPaused ?? false;
+  const deadlineOverride = competition?.deadlineOverride ?? settings?.deadlineOverride ?? false;
+  const deadlineApplies = !competition?.id || !settings?.competitionId || settings.competitionId === competition.id;
+  const submissionDeadline = deadlineApplies ? settings?.submissionDeadline : null;
+
+  if (scoringPaused) {
+    return "Competition has ended. Scoring is currently closed.";
+  }
+
+  if (submissionDeadline && submissionDeadline.getTime() <= Date.now() && !deadlineOverride) {
+    return "The submission deadline has passed. Scoring is currently closed.";
+  }
+
+  return null;
+}
 
 async function requireJudge() {
   const session = await auth();
@@ -44,7 +73,11 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     prisma.team.findUnique({
       where: { id: parsed.data.teamId },
       include: {
-        category: true,
+        category: {
+          include: {
+            competition: true,
+          },
+        },
         assignments: {
           where: { judgeId: judge.id },
         },
@@ -60,6 +93,11 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     return { error: "You are not assigned to this team." };
   }
 
+  const scoringClosedMessage = getScoringClosedMessage(settings, team.category?.competition ?? null);
+  if (scoringClosedMessage) {
+    return { error: scoringClosedMessage };
+  }
+
   if (!team.categoryId) {
     return { error: "Team category is required before scoring." };
   }
@@ -68,6 +106,12 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     where: {
       categoryId: team.categoryId,
       active: true,
+    },
+    include: {
+      subCriteria: {
+        where: { active: true },
+        orderBy: { displayOrder: "asc" },
+      },
     },
     orderBy: { displayOrder: "asc" },
   });
@@ -82,8 +126,13 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
   }
 
   const criteriaMap = new Map(criteria.map((criterion) => [criterion.id, criterion]));
-  const normalizedItems: Array<{ criterionId: string; numericScore: number; weightedValue: number; comment: string }> =
-    [];
+  const normalizedItems: Array<{
+    criterionId: string;
+    numericScore: number;
+    weightedValue: number;
+    comment: string;
+    subItems: Array<{ subCriterionId: string; numericScore: number; weightedValue: number; comment: string }>;
+  }> = [];
 
   for (const item of parsed.data.items) {
     const criterion = criteriaMap.get(item.criterionId);
@@ -92,15 +141,70 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
       return { error: "One or more criteria are invalid." };
     }
 
-    if (item.numericScore < criterion.minScore || item.numericScore > criterion.maxScore) {
+    const subCriteria = criterion.subCriteria;
+    const subItems = item.subItems ?? [];
+    let numericScore = item.numericScore;
+
+    if (subCriteria.length) {
+      const subWeight = subCriteria.reduce((sum, subCriterion) => sum + subCriterion.weight, 0);
+      if (Math.abs(subWeight - 100) > 0.001) {
+        return { error: `${criterion.name} sub-criteria weights must total exactly 100% before scoring.` };
+      }
+
+      const subCriteriaMap = new Map(subCriteria.map((subCriterion) => [subCriterion.id, subCriterion]));
+      const normalizedSubItems = [];
+
+      for (const subItem of subItems) {
+        const subCriterion = subCriteriaMap.get(subItem.subCriterionId);
+        if (!subCriterion) {
+          return { error: "One or more sub-criteria are invalid." };
+        }
+
+        if (subItem.numericScore < subCriterion.minScore || subItem.numericScore > subCriterion.maxScore) {
+          return {
+            error: `${subCriterion.name} must be between ${subCriterion.minScore} and ${subCriterion.maxScore}.`,
+          };
+        }
+
+        normalizedSubItems.push({
+          subCriterionId: subCriterion.id,
+          numericScore: subItem.numericScore,
+          weightedValue: round(subItem.numericScore * (subCriterion.weight / 100)),
+          comment: subItem.comment.trim(),
+        });
+      }
+
+      if (normalizedSubItems.length !== subCriteria.length) {
+        return { error: `All active sub-criteria for ${criterion.name} must be scored.` };
+      }
+
+      numericScore = round(normalizedSubItems.reduce((sum, subItem) => sum + subItem.weightedValue, 0));
+
+      if (numericScore < criterion.minScore || numericScore > criterion.maxScore) {
+        return { error: `${criterion.name} sub-score total must be between ${criterion.minScore} and ${criterion.maxScore}.` };
+      }
+
+      normalizedItems.push({
+        criterionId: criterion.id,
+        numericScore,
+        weightedValue: round(numericScore * (criterion.weight / 100)),
+        comment: item.comment.trim(),
+        subItems: normalizedSubItems,
+      });
+
+      continue;
+    }
+
+    if (numericScore < criterion.minScore || numericScore > criterion.maxScore) {
       return { error: `${criterion.name} must be between ${criterion.minScore} and ${criterion.maxScore}.` };
     }
 
     normalizedItems.push({
       criterionId: criterion.id,
-      numericScore: item.numericScore,
-      weightedValue: round(item.numericScore * (criterion.weight / 100)),
+      numericScore,
+      weightedValue: round(numericScore * (criterion.weight / 100)),
       comment: item.comment.trim(),
+      subItems: [],
     });
   }
 
@@ -113,7 +217,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     },
   });
 
-  if (existing?.status === ScoreStatus.SUBMITTED && !settings?.allowEditAfterSubmit) {
+  if ((existing?.status === ScoreStatus.SUBMITTED || existing?.status === ScoreStatus.EDITED) && !settings?.allowEditAfterSubmit) {
     return { error: "Editing after submission is disabled by the admin." };
   }
 
@@ -144,7 +248,15 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
             ...saveData,
             items: {
               deleteMany: {},
-              create: normalizedItems,
+              create: normalizedItems.map((item) => ({
+                criterionId: item.criterionId,
+                numericScore: item.numericScore,
+                weightedValue: item.weightedValue,
+                comment: item.comment,
+                subItems: {
+                  create: item.subItems,
+                },
+              })),
             },
             audits: {
               create: {
@@ -162,7 +274,15 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
           data: {
             ...saveData,
             items: {
-              create: normalizedItems,
+              create: normalizedItems.map((item) => ({
+                criterionId: item.criterionId,
+                numericScore: item.numericScore,
+                weightedValue: item.weightedValue,
+                comment: item.comment,
+                subItems: {
+                  create: item.subItems,
+                },
+              })),
             },
             audits: {
               create: {

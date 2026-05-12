@@ -57,7 +57,7 @@ const authConfig: NextAuthConfig = {
           return null;
         }
 
-        const isValid = await bcrypt.compare(parsed.data.password, user.passwordHash);
+        const isValid = await bcrypt.compare(parsed.data.password.trim(), user.passwordHash);
 
         if (!isValid) {
           return null;

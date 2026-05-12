@@ -20,12 +20,12 @@ export function CardHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+    <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:gap-4 sm:px-5">
       <div className="space-y-1">
         <h2 className="text-base font-semibold text-slate-900">{title}</h2>
         {description ? <p className="text-sm text-slate-500">{description}</p> : null}
       </div>
-      {action}
+      {action ? <div className="w-full sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">{action}</div> : null}
     </div>
   );
 }

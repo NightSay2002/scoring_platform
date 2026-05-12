@@ -1,13 +1,14 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { signIn, signOut } from "@/auth";
 import { LOCALE_COOKIE_NAME, dictionaries, normalizeLocale } from "@/lib/i18n";
 
 export async function loginAction(_: { error?: string } | undefined, formData: FormData) {
-  const identifier = String(formData.get("identifier") ?? "");
-  const password = String(formData.get("password") ?? "");
+  const identifier = String(formData.get("identifier") ?? "").trim();
+  const password = String(formData.get("password") ?? "").trim();
   const localeFromForm = String(formData.get("locale") ?? "");
   const localeFromCookie = (await cookies()).get(LOCALE_COOKIE_NAME)?.value;
   const locale = normalizeLocale(localeFromForm || localeFromCookie);
@@ -31,6 +32,8 @@ export async function loginAction(_: { error?: string } | undefined, formData: F
 
 export async function logoutAction() {
   await signOut({
-    redirectTo: "/login",
+    redirect: false,
   });
+
+  redirect("/login");
 }

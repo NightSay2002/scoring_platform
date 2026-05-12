@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { CheckCircle2, Pencil, Plus, ShieldCheck, Trash2, Video, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, Image as ImageIcon, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
 
 import {
   approveTeamSubmissionAction,
@@ -14,9 +14,9 @@ import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
 import { Input } from "@/components/shared/input";
+import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
 import { DataTable, Table, TBody, TD, TH, THead } from "@/components/shared/table";
-import { formatRelativeTime } from "@/lib/utils";
 
 type TeamRow = {
   id: string;
@@ -26,6 +26,7 @@ type TeamRow = {
   competitionName: string;
   categoryId: string;
   categoryName: string;
+  ownerUserId: string;
   ownerEmail: string;
   projectTitle: string;
   projectDescription: string;
@@ -33,6 +34,8 @@ type TeamRow = {
   teamMembers: string;
   videoUrl: string;
   imageUrl: string;
+  documentUrl: string;
+  documentName: string;
   submissionStatus: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote: string;
   submittedCount: number;
@@ -53,18 +56,27 @@ type Competition = {
   name: string;
 };
 
+type TeamAccount = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 const emptyForm = {
   id: "",
   teamCode: "",
   teamName: "",
   competitionId: "",
   categoryId: "",
+  ownerUserId: "",
   projectTitle: "",
   projectDescription: "",
   organization: "",
   teamMembers: "",
   videoUrl: "",
   imageUrl: "",
+  documentUrl: "",
+  documentName: "",
   reviewNote: "",
 };
 
@@ -72,11 +84,13 @@ export function TeamManagementClient({
   teams,
   competitions,
   categories,
+  teamAccounts,
   judgeScope,
 }: {
   teams: TeamRow[];
   competitions: Competition[];
   categories: Category[];
+  teamAccounts: TeamAccount[];
   judges: Array<{ id: string; name: string }>;
   judgeScope: "ALL" | "ASSIGNED";
 }) {
@@ -89,6 +103,8 @@ export function TeamManagementClient({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [message, setMessage] = useState<string>("");
+  const [avatarFileName, setAvatarFileName] = useState("");
+  const [documentFileName, setDocumentFileName] = useState("");
   const [pending, startTransition] = useTransition();
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
@@ -125,6 +141,8 @@ export function TeamManagementClient({
       ...emptyForm,
       competitionId: competitions[0]?.id ?? "",
     });
+    setAvatarFileName("");
+    setDocumentFileName("");
     setMessage("");
   }
 
@@ -136,14 +154,19 @@ export function TeamManagementClient({
       teamName: team.teamName,
       competitionId: team.competitionId,
       categoryId: team.categoryId,
+      ownerUserId: team.ownerUserId,
       projectTitle: team.projectTitle,
       projectDescription: team.projectDescription,
       organization: team.organization,
       teamMembers: team.teamMembers,
       videoUrl: team.videoUrl,
       imageUrl: team.imageUrl,
+      documentUrl: team.documentUrl,
+      documentName: team.documentName,
       reviewNote: team.reviewNote,
     });
+    setAvatarFileName("");
+    setDocumentFileName(team.documentName);
     setMessage("");
   }
 
@@ -182,6 +205,43 @@ export function TeamManagementClient({
 
       setMessage(t.teamSaved);
       startCreate();
+    });
+  }
+
+  function handleUpload(kind: "avatar" | "document", file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    if (kind === "avatar") {
+      setAvatarFileName(file.name);
+    } else {
+      setDocumentFileName(file.name);
+    }
+
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("kind", kind);
+      formData.set("file", file);
+      const response = await fetch("/api/upload/team-asset", {
+        method: "POST",
+        body: formData,
+      });
+      const result = (await response.json()) as { error?: string; url?: string; name?: string };
+      if (result?.error || !result?.url) {
+        setMessage(result?.error ?? t.uploadFailed);
+        return;
+      }
+
+      const uploadedUrl = result.url;
+      const uploadedName = result.name ?? file.name;
+      setForm((current) => ({
+        ...current,
+        ...(kind === "avatar"
+          ? { imageUrl: uploadedUrl }
+          : { documentUrl: uploadedUrl, documentName: uploadedName }),
+      }));
+      setMessage(t.uploaded);
     });
   }
 
@@ -319,12 +379,19 @@ export function TeamManagementClient({
                       {team.submittedCount}/{team.expectedCount}
                     </TD>
                     <TD>{team.averageScore.toFixed(2)}</TD>
-                    <TD>{formatRelativeTime(team.updatedAt, locale)}</TD>
+                    <TD>
+                      <RelativeTime date={team.updatedAt} locale={locale} />
+                    </TD>
                     <TD>
                       <div className="flex items-center gap-1">
                         {team.videoUrl ? (
                           <a href={team.videoUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-lg p-2 text-sky-700">
                             <Video className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                        {team.documentUrl ? (
+                          <a href={team.documentUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-lg p-2 text-emerald-700">
+                            <FileText className="h-4 w-4" />
                           </a>
                         ) : null}
                         {team.submissionStatus !== "APPROVED" ? (
@@ -405,6 +472,22 @@ export function TeamManagementClient({
             </div>
           </div>
           <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.ownerAccount}</label>
+            <select
+              value={form.ownerUserId}
+              onChange={(event) => setForm((current) => ({ ...current, ownerUserId: event.target.value }))}
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+            >
+              <option value="">{t.noOwnerAccount}</option>
+              {teamAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} - {account.email}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">{t.ownerAccountHelp}</p>
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">{t.projectTitle}</label>
             <Input value={form.projectTitle} onChange={(event) => setForm((current) => ({ ...current, projectTitle: event.target.value }))} />
           </div>
@@ -434,16 +517,44 @@ export function TeamManagementClient({
               <Input value={form.imageUrl} onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))} />
             </div>
           </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{t.avatarUpload}</label>
+              <p className="text-xs text-slate-500">{t.avatarUploadHelp}</p>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                <ImageIcon className="h-4 w-4" />
+                {t.uploadAvatar}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" onChange={(event) => handleUpload("avatar", event.target.files?.[0] ?? null)} />
+              </label>
+              {avatarFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {avatarFileName}</p> : null}
+              {form.imageUrl ? <p className="break-all text-xs text-slate-500">{form.imageUrl}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{t.documentUpload}</label>
+              <p className="text-xs text-slate-500">{t.documentUploadHelp}</p>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                <Upload className="h-4 w-4" />
+                {t.uploadDocument}
+                <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" className="sr-only" onChange={(event) => handleUpload("document", event.target.files?.[0] ?? null)} />
+              </label>
+              {documentFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {documentFileName}</p> : null}
+              {form.documentUrl ? (
+                <a href={form.documentUrl} target="_blank" rel="noreferrer" className="block break-all text-xs font-medium text-sky-700">
+                  {form.documentName || form.documentUrl}
+                </a>
+              ) : null}
+            </div>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">{t.reviewNote}</label>
             <Textarea value={form.reviewNote} onChange={(event) => setForm((current) => ({ ...current, reviewNote: event.target.value }))} />
           </div>
           {message ? <p className="text-sm text-slate-600">{message}</p> : null}
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="outline" onClick={startCreate}>
+          <div className="flex flex-col-reverse items-stretch justify-end gap-3 sm:flex-row sm:items-center">
+            <Button variant="outline" onClick={startCreate} className="w-full sm:w-auto">
               {t.reset}
             </Button>
-            <Button onClick={handleSave} disabled={pending} className="gap-2">
+            <Button onClick={handleSave} disabled={pending} className="w-full gap-2 sm:w-auto">
               {selectedTeam ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {pending ? t.saving : selectedTeam ? t.updateTeam : t.createTeam}
             </Button>

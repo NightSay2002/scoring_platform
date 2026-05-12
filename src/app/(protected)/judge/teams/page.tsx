@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { CompetitionImageCarousel } from "@/components/judge/competition-image-carousel";
 import { Badge } from "@/components/shared/badge";
 import { Card, CardContent } from "@/components/shared/card";
 import { PageHeader } from "@/components/shared/page-header";
@@ -32,6 +33,7 @@ export default async function JudgeTeamsPage({
 
   const t = messages.judgeTeams;
   const common = messages.common;
+  const selectedCompetition = data.competitions.find((competition) => competition.id === selectedCompetitionId);
   const filteredCategories = data.categories.filter(
     (category) => !selectedCompetitionId || category.competitionId === selectedCompetitionId,
   );
@@ -72,13 +74,16 @@ export default async function JudgeTeamsPage({
                 </option>
               ))}
             </select>
-            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">{t.applyFilters}</button>
+            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white md:justify-self-start">{t.applyFilters}</button>
           </form>
         </CardContent>
       </Card>
+      {selectedCompetitionId && selectedCompetition?.images.length ? (
+        <CompetitionImageCarousel images={selectedCompetition.images} title={selectedCompetition.name} />
+      ) : null}
       <Card>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex flex-col items-start justify-between gap-1 text-sm text-slate-500 sm:flex-row sm:items-center">
             <span>{t.completionProgress}</span>
             <span>
               {filteredTeams.filter((team) => team.status === "SUBMITTED" || team.status === "EDITED").length}/{filteredTeams.length} {t.teamsSubmitted}
