@@ -1179,6 +1179,50 @@ export async function upsertUserAccountAction(payload: {
   return { success: true };
 }
 
+export async function deleteUserAccountAction(userId: string, expectedUpdatedAt?: string) {
+  const admin = await requireAdmin();
+  const targetUserId = userId.trim();
+
+  if (!targetUserId) {
+    return { error: "Account is required." };
+  }
+
+  if (targetUserId === admin.id) {
+    return { error: "You cannot delete your own account while signed in." };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, role: true, active: true, updatedAt: true },
+  });
+
+  if (!user) {
+    return { error: "Account not found." };
+  }
+
+  if (isStaleVersion(user.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
+  if (user.role === Role.ADMIN && user.active) {
+    const adminCount = await prisma.user.count({
+      where: {
+        role: Role.ADMIN,
+        active: true,
+      },
+    });
+
+    if (adminCount <= 1) {
+      return { error: "You cannot delete the last active admin account." };
+    }
+  }
+
+  await withSqliteWriteRetry(() => prisma.user.delete({ where: { id: targetUserId } }));
+
+  revalidateAppData();
+  return { success: true };
+}
+
 export async function approveTeamSubmissionAction(teamId: string, expectedUpdatedAt?: string) {
   const admin = await requireAdmin();
   const team = await prisma.team.findUnique({

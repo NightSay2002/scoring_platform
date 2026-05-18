@@ -12,6 +12,7 @@ import {
   deleteCompetitionImageAction,
   deleteCriterionAction,
   deleteCriterionSubItemAction,
+  deleteUserAccountAction,
   updateSettingsAction,
   updateCompetitionAction,
   upsertCategoryAction,
@@ -608,6 +609,36 @@ export function SettingsClient({
       active: item.active,
       linkedTeamId: item.linkedTeamId,
       expectedUpdatedAt: item.updatedAt,
+    });
+  }
+
+  function removeAccount(item: Account) {
+    if (!window.confirm(t.confirmDeleteAccount)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteUserAccountAction(item.id, item.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      if (accountForm.id === item.id) {
+        setAccountForm({
+          id: "",
+          name: "",
+          email: "",
+          password: "",
+          role: "JUDGE",
+          active: true,
+          linkedTeamId: "",
+          expectedUpdatedAt: "",
+        });
+      }
+
+      setMessage(t.accountDeleted);
+      router.refresh();
     });
   }
 
@@ -1218,9 +1249,14 @@ export function SettingsClient({
                       </Badge>
                     </TD>
                     <TD>
-                      <Button variant="ghost" size="sm" onClick={() => editAccount(account)}>
-                        {common.actions.edit}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => editAccount(account)}>
+                          {common.actions.edit}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => removeAccount(account)}>
+                          <Trash2 className="h-4 w-4 text-rose-600" />
+                        </Button>
+                      </div>
                     </TD>
                   </tr>
                 ))}
