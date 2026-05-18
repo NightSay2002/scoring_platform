@@ -39,7 +39,10 @@ export default async function TeamDashboardPage() {
         title={t.title}
         description={t.description}
         action={
-          <Link href={`/team/submission?competitionId=${data.selectedCompetitionId}`} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+          <Link
+            href={`/team/submission?competitionId=${data.selectedCompetitionId}`}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white visited:!text-white hover:!text-white"
+          >
             {t.openSubmission}
           </Link>
         }

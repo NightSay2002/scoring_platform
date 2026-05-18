@@ -97,7 +97,7 @@ export function Sidebar({
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
-                active ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-900 hover:text-white",
+                active ? "bg-slate-800 !text-white visited:!text-white" : "text-slate-300 visited:text-slate-300 hover:bg-slate-900 hover:!text-white",
               )}
             >
               <Icon className="h-4 w-4" />
@@ -133,8 +133,8 @@ export function MobileRoleNav({
             className={cn(
               "inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition",
               active
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                ? "border-slate-900 bg-slate-900 !text-white visited:!text-white"
+                : "border-slate-200 bg-white text-slate-700 visited:text-slate-700 hover:bg-slate-50",
             )}
           >
             <Icon className="h-3.5 w-3.5" />
