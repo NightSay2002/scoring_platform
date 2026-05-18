@@ -410,8 +410,21 @@ export async function upsertCriterionAction(payload: {
   return { success: true };
 }
 
-export async function deleteCriterionAction(criterionId: string) {
+export async function deleteCriterionAction(criterionId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const currentCriterion = await prisma.criterion.findUnique({
+    where: { id: criterionId },
+    select: { updatedAt: true },
+  });
+
+  if (!currentCriterion) {
+    return { error: "Criterion not found." };
+  }
+
+  if (isStaleVersion(currentCriterion.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   await withSqliteWriteRetry(() => prisma.criterion.delete({ where: { id: criterionId } }));
 
   revalidateAppData();
@@ -517,8 +530,21 @@ export async function upsertCriterionSubItemAction(payload: {
   return { success: true };
 }
 
-export async function deleteCriterionSubItemAction(subCriterionId: string) {
+export async function deleteCriterionSubItemAction(subCriterionId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const currentSubCriterion = await prisma.criterionSubItem.findUnique({
+    where: { id: subCriterionId },
+    select: { updatedAt: true },
+  });
+
+  if (!currentSubCriterion) {
+    return { error: "Sub-criterion not found." };
+  }
+
+  if (isStaleVersion(currentSubCriterion.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   await withSqliteWriteRetry(() => prisma.criterionSubItem.delete({ where: { id: subCriterionId } }));
 
   revalidateAppData();
@@ -581,8 +607,21 @@ export async function upsertCategoryAction(payload: {
   return { success: true };
 }
 
-export async function deleteCategoryAction(categoryId: string) {
+export async function deleteCategoryAction(categoryId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const currentCategory = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: { updatedAt: true },
+  });
+
+  if (!currentCategory) {
+    return { error: "Category not found." };
+  }
+
+  if (isStaleVersion(currentCategory.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   await withSqliteWriteRetry(() => prisma.category.delete({ where: { id: categoryId } }));
 
   revalidateAppData();
@@ -874,7 +913,7 @@ export async function updateCompetitionAction(payload: {
   }
 }
 
-export async function deleteCompetitionAction(competitionId: string) {
+export async function deleteCompetitionAction(competitionId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
 
   if (!competitionId) {
@@ -886,11 +925,15 @@ export async function deleteCompetitionAction(competitionId: string) {
       prisma.$transaction(async (tx) => {
         const competition = await tx.competition.findUnique({
           where: { id: competitionId },
-          select: { id: true },
+          select: { id: true, updatedAt: true },
         });
 
         if (!competition) {
           throw new Error("Competition not found.");
+        }
+
+        if (isStaleVersion(competition.updatedAt, expectedUpdatedAt)) {
+          return staleAdminPageResult;
         }
 
         const fallbackCompetition = await tx.competition.findFirst({
@@ -915,10 +958,15 @@ export async function deleteCompetitionAction(competitionId: string) {
         });
 
         return {
+          success: true as const,
           nextCompetitionId: fallbackCompetition?.id ?? "",
         };
       }),
     );
+
+    if (!("success" in result)) {
+      return result;
+    }
 
     revalidateAppData();
     return { success: true, nextCompetitionId: result.nextCompetitionId };
@@ -991,8 +1039,21 @@ export async function addCompetitionImageAction(payload: {
   };
 }
 
-export async function deleteCompetitionImageAction(imageId: string) {
+export async function deleteCompetitionImageAction(imageId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const currentImage = await prisma.competitionImage.findUnique({
+    where: { id: imageId },
+    select: { updatedAt: true },
+  });
+
+  if (!currentImage) {
+    return { error: "Competition image not found." };
+  }
+
+  if (isStaleVersion(currentImage.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   await withSqliteWriteRetry(() => prisma.competitionImage.delete({ where: { id: imageId } }));
 
   revalidateAppData();

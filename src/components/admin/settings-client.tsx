@@ -55,6 +55,7 @@ type CompetitionImage = {
   imageUrl: string;
   imageName: string | null;
   displayOrder: number;
+  updatedAt: string;
 };
 
 type SubCriterion = {
@@ -459,6 +460,7 @@ export function SettingsClient({
         active: true,
         expectedUpdatedAt: "",
       });
+      router.refresh();
     });
   }
 
@@ -494,6 +496,7 @@ export function SettingsClient({
         active: true,
         expectedUpdatedAt: "",
       });
+      router.refresh();
     });
   }
 
@@ -523,6 +526,7 @@ export function SettingsClient({
         active: true,
         expectedUpdatedAt: "",
       });
+      router.refresh();
     });
   }
 
@@ -545,6 +549,7 @@ export function SettingsClient({
         linkedTeamId: "",
         expectedUpdatedAt: "",
       });
+      router.refresh();
     });
   }
 
@@ -616,46 +621,69 @@ export function SettingsClient({
     });
   }
 
-  function removeCriterion(id: string) {
+  function removeCriterion(item: Criterion) {
     if (!window.confirm(t.confirmDeleteCriterion)) {
       return;
     }
 
     startTransition(async () => {
-      await deleteCriterionAction(id);
+      const result = await deleteCriterionAction(item.id, item.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.criterionDeleted);
+      router.refresh();
     });
   }
 
-  function removeSubCriterion(id: string) {
+  function removeSubCriterion(item: SubCriterion) {
     if (!window.confirm(t.confirmDeleteSubCriterion)) {
       return;
     }
 
     startTransition(async () => {
-      await deleteCriterionSubItemAction(id);
+      const result = await deleteCriterionSubItemAction(item.id, item.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.subCriterionDeleted);
+      router.refresh();
     });
   }
 
-  function removeCategory(id: string) {
+  function removeCategory(item: Category) {
     if (!window.confirm(t.confirmDeleteCategory)) {
       return;
     }
 
     startTransition(async () => {
-      await deleteCategoryAction(id);
+      const result = await deleteCategoryAction(item.id, item.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.categoryDeleted);
+      router.refresh();
     });
   }
 
-  function removeCompetitionImage(id: string) {
+  function removeCompetitionImage(image: CompetitionImage) {
     if (!window.confirm(t.confirmDeleteCompetitionImage)) {
       return;
     }
 
     startTransition(async () => {
-      await deleteCompetitionImageAction(id);
+      const result = await deleteCompetitionImageAction(image.id, image.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.competitionImageDeleted);
       router.refresh();
     });
@@ -667,13 +695,13 @@ export function SettingsClient({
     }
 
     startTransition(async () => {
-      const result = await deleteCompetitionAction(settingsForm.competitionId);
+      const result = await deleteCompetitionAction(settingsForm.competitionId, competitionDetailsForm.expectedUpdatedAt);
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
-      const nextCompetitionId = result?.nextCompetitionId ?? "";
+      const nextCompetitionId = result && "nextCompetitionId" in result ? result.nextCompetitionId ?? "" : "";
       setMessage(t.competitionDeleted);
       setCompetitionDetailsForm({ name: "", description: "", expectedUpdatedAt: "" });
       setSettingsForm((current) => ({ ...current, competitionId: nextCompetitionId }));
@@ -790,7 +818,7 @@ export function SettingsClient({
                       <img src={image.imageUrl} alt={image.imageName ?? t.competitionImageAlt} className="h-28 w-full object-cover" />
                       <div className="space-y-2 p-3">
                         <p className="truncate text-xs font-medium text-slate-700">{image.imageName ?? image.imageUrl}</p>
-                        <Button variant="ghost" size="sm" onClick={() => removeCompetitionImage(image.id)} className="w-full text-rose-600">
+                        <Button variant="ghost" size="sm" onClick={() => removeCompetitionImage(image)} className="w-full text-rose-600">
                           {t.deleteCompetitionImage}
                         </Button>
                       </div>
@@ -891,7 +919,7 @@ export function SettingsClient({
                           <Button variant="ghost" size="sm" onClick={() => editCategory(category)}>
                             {common.actions.edit}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => removeCategory(category.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => removeCategory(category)}>
                             <Trash2 className="h-4 w-4 text-rose-600" />
                           </Button>
                         </div>
@@ -985,7 +1013,7 @@ export function SettingsClient({
                           <Button variant="ghost" size="sm" onClick={() => editCriterion(item)}>
                             {common.actions.edit}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => removeCriterion(item.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => removeCriterion(item)}>
                             <Trash2 className="h-4 w-4 text-rose-600" />
                           </Button>
                         </div>
@@ -1127,7 +1155,7 @@ export function SettingsClient({
                           <Button variant="ghost" size="sm" onClick={() => editSubCriterion(subCriterion)}>
                             {common.actions.edit}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => removeSubCriterion(subCriterion.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => removeSubCriterion(subCriterion)}>
                             <Trash2 className="h-4 w-4 text-rose-600" />
                           </Button>
                         </div>

@@ -753,6 +753,7 @@ export async function getSettingsPageData(competitionId?: string) {
         imageUrl: image.imageUrl,
         imageName: image.imageName,
         displayOrder: image.displayOrder,
+        updatedAt: image.updatedAt.toISOString(),
       })),
     })),
     selectedCompetitionId: selectedCompetitionId ?? "",

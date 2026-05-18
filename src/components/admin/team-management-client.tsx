@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, FileText, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
 
 import {
@@ -110,6 +111,7 @@ export function TeamManagementClient({
   judges: Array<{ id: string; name: string }>;
   judgeScope: "ALL" | "ASSIGNED";
 }) {
+  const router = useRouter();
   const { locale, messages } = useI18n();
   const t = messages.teamManagement;
   const common = messages.common;
@@ -240,8 +242,9 @@ export function TeamManagementClient({
         return;
       }
 
-      setMessage(t.teamSaved);
       startCreate();
+      setMessage(t.teamSaved);
+      router.refresh();
     });
   }
 
@@ -321,15 +324,22 @@ export function TeamManagementClient({
         return;
       }
 
-      setMessage(t.teamDeleted);
       startCreate();
+      setMessage(t.teamDeleted);
+      router.refresh();
     });
   }
 
   async function handleApprove(team: TeamRow) {
     startTransition(async () => {
       const result = await approveTeamSubmissionAction(team.id, team.updatedAt);
-      setMessage(result && "stale" in result && result.stale ? t.stalePageRefresh : result?.error ?? t.teamApproved);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      setMessage(t.teamApproved);
+      router.refresh();
     });
   }
 
@@ -344,6 +354,7 @@ export function TeamManagementClient({
       }
 
       setMessage(t.teamRejected);
+      router.refresh();
     });
   }
 
