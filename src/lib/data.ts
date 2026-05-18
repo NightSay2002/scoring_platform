@@ -380,6 +380,28 @@ export async function getAdminDashboardData() {
       lastActivity: judge.scores[0]?.updatedAt ?? judge.lastLoginAt ?? judge.updatedAt,
     };
   });
+  const categoryLeaders = new Map<
+    string,
+    {
+      categoryId: string | null;
+      categoryName: string;
+      leader: string;
+      averageScore: number;
+    }
+  >();
+
+  for (const row of rankedRows) {
+    const categoryKey = row.categoryId ?? row.categoryName;
+
+    if (!categoryLeaders.has(categoryKey)) {
+      categoryLeaders.set(categoryKey, {
+        categoryId: row.categoryId,
+        categoryName: row.categoryName,
+        leader: row.teamName,
+        averageScore: row.averageScore,
+      });
+    }
+  }
 
   return {
     settings,
@@ -399,18 +421,7 @@ export async function getAdminDashboardData() {
       createdAt: audit.createdAt,
     })),
     judgeProgress,
-    categorySummary: Array.from(
-      new Map(
-        rankedRows.map((row) => [
-          row.categoryName,
-          {
-            categoryName: row.categoryName,
-            leader: row.teamName,
-            averageScore: row.averageScore,
-          },
-        ]),
-      ).values(),
-    ),
+    categorySummary: Array.from(categoryLeaders.values()),
   };
 }
 

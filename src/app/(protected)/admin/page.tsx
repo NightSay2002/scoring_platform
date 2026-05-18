@@ -95,7 +95,7 @@ export default async function AdminDashboardPage() {
         <CardHeader title={t.categoryLeadersTitle} description={t.categoryLeadersDesc} />
         <CardContent className="grid gap-4 md:grid-cols-3">
           {data.categorySummary.map((category) => (
-            <div key={category.categoryName} className="rounded-2xl border border-slate-200 p-4">
+            <div key={category.categoryId ?? category.categoryName} className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm text-slate-500">{category.categoryName}</p>
               <p className="mt-2 font-semibold text-slate-950">{category.leader}</p>
               <p className="mt-1 text-sm text-slate-500">{messages.common.words.average} {category.averageScore.toFixed(2)}</p>
