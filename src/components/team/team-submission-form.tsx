@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { FileText, Image as ImageIcon, Link2, Save, Send, Upload } from "lucide-react";
 
 import { saveTeamDraftAction, submitTeamForApprovalAction } from "@/actions/team";
@@ -25,6 +26,7 @@ type Competition = {
 };
 
 type TeamSubmission = {
+  id: string;
   teamCode: string;
   teamName: string;
   competitionId: string;
@@ -66,6 +68,8 @@ export function TeamSubmissionForm({
   categories: Category[];
   team: TeamSubmission;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const { locale, messages } = useI18n();
   const t = messages.teamSubmissionForm;
   const common = messages.common;
@@ -107,15 +111,11 @@ export function TeamSubmissionForm({
           : common.statuses.draft;
 
   function handleCompetitionChange(competitionId: string) {
-    const nextCategories = categories.filter((category) => category.competitionId === competitionId);
-    setForm((current) => ({
-      ...current,
-      competitionId,
-      categoryId:
-        current.categoryId && nextCategories.some((category) => category.id === current.categoryId)
-          ? current.categoryId
-          : "",
-    }));
+    const nextParams = new URLSearchParams();
+    if (competitionId) {
+      nextParams.set("competitionId", competitionId);
+    }
+    router.push(nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname);
   }
 
   function handleDraftSave() {
@@ -132,6 +132,7 @@ export function TeamSubmissionForm({
       }
 
       setSubmissionStatus(result.team.submissionStatus);
+      setForm((current) => ({ ...current, teamCode: result.team.teamCode ?? current.teamCode }));
       setUpdatedAt(result.team.updatedAt);
       setMessage(t.draftSaved);
     });
@@ -192,6 +193,7 @@ export function TeamSubmissionForm({
       }
 
       setSubmissionStatus(result.team.submissionStatus);
+      setForm((current) => ({ ...current, teamCode: result.team.teamCode ?? current.teamCode }));
       setUpdatedAt(result.team.updatedAt);
       setMessage(t.sentForApproval);
     });
@@ -228,7 +230,7 @@ export function TeamSubmissionForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">{t.teamCode}</label>
-            <Input value={form.teamCode} onChange={(event) => setForm((current) => ({ ...current, teamCode: event.target.value }))} disabled={locked || pending} />
+            <Input value={form.teamCode || t.autoTeamCode} disabled />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">{t.teamName}</label>

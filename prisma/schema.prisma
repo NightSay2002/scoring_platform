@@ -49,7 +49,7 @@ model User {
   scores       Score[]
   assignments  TeamAssignment[]
   auditEvents  ScoreAudit[]
-  ownedTeam    Team?            @relation("TeamOwner")
+  ownedTeams   Team[]           @relation("TeamOwner")
   approvedTeams Team[]          @relation("TeamApprover")
   competitionScorers CompetitionScorer[]
 }
@@ -69,7 +69,7 @@ model Team {
   documentLinks      String?
   status             TeamStatus       @default(ACTIVE)
   categoryId         String?
-  ownerUserId        String?          @unique
+  ownerUserId        String?
   submissionStatus   ApprovalStatus   @default(DRAFT)
   submittedAt        DateTime?
   approvedAt         DateTime?

@@ -195,7 +195,6 @@ CREATE UNIQUE INDEX "Competition_name_key" ON "Competition"("name");
 CREATE UNIQUE INDEX "CompetitionScorer_competitionId_userId_key" ON "CompetitionScorer"("competitionId", "userId");
 CREATE UNIQUE INDEX "Category_competitionId_name_key" ON "Category"("competitionId", "name");
 CREATE UNIQUE INDEX "Team_teamCode_key" ON "Team"("teamCode");
-CREATE UNIQUE INDEX "Team_ownerUserId_key" ON "Team"("ownerUserId");
 CREATE UNIQUE INDEX "TeamAssignment_teamId_judgeId_key" ON "TeamAssignment"("teamId", "judgeId");
 CREATE UNIQUE INDEX "Criterion_categoryId_name_key" ON "Criterion"("categoryId", "name");
 CREATE UNIQUE INDEX "CriterionSubItem_criterionId_name_key" ON "CriterionSubItem"("criterionId", "name");

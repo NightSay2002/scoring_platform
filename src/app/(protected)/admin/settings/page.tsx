@@ -24,7 +24,6 @@ export default async function AdminSettingsPage({
         criteria={data.criteria}
         categories={data.categories}
         accounts={data.accounts}
-        teams={data.teams}
       />
     </div>
   );

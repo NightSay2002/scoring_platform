@@ -6,7 +6,7 @@ function normalizeMemberName(value: string) {
 
 export const teamSchema = z.object({
   id: z.string().optional(),
-  teamCode: z.string().min(1, "Team code is required."),
+  teamCode: z.string().optional().or(z.literal("")),
   teamName: z.string().min(1, "Team name is required."),
   competitionId: z.string().min(1, "Competition is required."),
   categoryId: z.string().min(1, "Category is required."),

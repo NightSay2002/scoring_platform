@@ -39,7 +39,7 @@ export default async function TeamDashboardPage() {
         title={t.title}
         description={t.description}
         action={
-          <Link href="/team/submission" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+          <Link href={`/team/submission?competitionId=${data.selectedCompetitionId}`} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
             {t.openSubmission}
           </Link>
         }
@@ -53,6 +53,34 @@ export default async function TeamDashboardPage() {
         <StatCard label={t.categoryLabel} value={data.team.categoryName || common.labels.notSet} help={t.categoryHelp} />
         <StatCard label={t.judgeSubmissionsLabel} value={data.team.stats.submittedJudgeCount} help={t.judgeSubmissionsHelp} />
       </div>
+      <Card>
+        <CardHeader title={t.availableCompetitionsTitle} description={t.availableCompetitionsDesc} />
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {data.competitions.map((competition) => {
+            const submission = data.submissions.find((entry) => entry.competitionId === competition.id);
+
+            return (
+              <Link
+                key={competition.id}
+                href={`/team/submission?competitionId=${competition.id}`}
+                className="rounded-2xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-950">{competition.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{submission?.projectTitle || t.noSubmissionYet}</p>
+                  </div>
+                  <Badge tone={submission?.submissionStatus === "APPROVED" ? "green" : submission?.submissionStatus === "PENDING" ? "blue" : submission?.submissionStatus === "REJECTED" ? "rose" : "amber"}>
+                    {submission
+                      ? common.statuses[submission.submissionStatus.toLowerCase() as "draft" | "pending" | "approved" | "rejected"]
+                      : common.statuses.draft}
+                  </Badge>
+                </div>
+              </Link>
+            );
+          })}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader title={t.currentSubmissionTitle} description={t.currentSubmissionDesc} />
         <CardContent className="space-y-4">

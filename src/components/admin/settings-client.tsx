@@ -105,16 +105,10 @@ type Account = {
   updatedAt: string;
   assignmentCount: number;
   submittedCount: number;
+  ownedTeamCount: number;
   linkedTeamId: string;
   linkedTeamLabel: string;
   categoryName: string;
-};
-
-type TeamOption = {
-  id: string;
-  teamCode: string;
-  teamName: string;
-  ownerUserId: string | null;
 };
 
 export function SettingsClient({
@@ -124,7 +118,6 @@ export function SettingsClient({
   criteria,
   categories,
   accounts,
-  teams,
 }: {
   settings: SettingsValue | null;
   competitions: Competition[];
@@ -132,7 +125,6 @@ export function SettingsClient({
   criteria: Criterion[];
   categories: Category[];
   accounts: Account[];
-  teams: TeamOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -213,8 +205,6 @@ export function SettingsClient({
   const [settingsUpdatedAt, setSettingsUpdatedAt] = useState(settings?.updatedAt ?? "");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
-
-  const availableTeamOptions = teams.filter((team) => !team.ownerUserId || team.id === accountForm.linkedTeamId);
 
   const projectedCategoryWeight = useMemo(() => {
     if (!criterionForm.categoryId) {
@@ -1202,9 +1192,11 @@ export function SettingsClient({
                       </Badge>
                     </TD>
                     <TD>
-                      {account.linkedTeamLabel ? (
+                      {account.role === "TEAM" ? (
                         <div>
-                          <div className="font-medium text-slate-950">{account.linkedTeamLabel}</div>
+                          <div className="font-medium text-slate-950">
+                            {account.ownedTeamCount} {t.submissionsCount}
+                          </div>
                           <div className="text-xs text-slate-500">{account.categoryName}</div>
                         </div>
                       ) : (
@@ -1259,20 +1251,6 @@ export function SettingsClient({
               value={accountForm.password}
               onChange={(event) => setAccountForm((current) => ({ ...current, password: event.target.value }))}
             />
-            {accountForm.role === "TEAM" ? (
-              <select
-                value={accountForm.linkedTeamId}
-                onChange={(event) => setAccountForm((current) => ({ ...current, linkedTeamId: event.target.value }))}
-                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 md:col-span-2"
-              >
-                <option value="">{t.selectLinkedTeam}</option>
-                {availableTeamOptions.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.teamCode} - {team.teamName}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
               <input type="checkbox" checked={accountForm.active} onChange={(event) => setAccountForm((current) => ({ ...current, active: event.target.checked }))} />
               {t.activeAccount}

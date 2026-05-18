@@ -664,7 +664,7 @@ export async function getLeaderboardData(competitionId?: string) {
 export async function getSettingsPageData(competitionId?: string) {
   const { settings, competitions, selectedCompetitionId } = await resolveCompetitionScope(competitionId);
 
-  const [criteria, categories, accounts, teams] = await Promise.all([
+  const [criteria, categories, accounts] = await Promise.all([
     prisma.criterion.findMany({
       where: selectedCompetitionId
         ? {
@@ -693,7 +693,7 @@ export async function getSettingsPageData(competitionId?: string) {
     prisma.user.findMany({
       orderBy: [{ role: "asc" }, { name: "asc" }],
       include: {
-        ownedTeam: {
+        ownedTeams: {
           include: {
             category: true,
           },
@@ -716,22 +716,6 @@ export async function getSettingsPageData(competitionId?: string) {
           },
         },
       },
-    }),
-    prisma.team.findMany({
-      where: selectedCompetitionId
-        ? {
-            category: {
-              competitionId: selectedCompetitionId,
-            },
-          }
-        : undefined,
-      select: {
-        id: true,
-        teamCode: true,
-        teamName: true,
-        ownerUserId: true,
-      },
-      orderBy: { teamCode: "asc" },
     }),
   ]);
 
@@ -791,7 +775,6 @@ export async function getSettingsPageData(competitionId?: string) {
       active: category.active,
       updatedAt: category.updatedAt.toISOString(),
     })),
-    teams,
     accounts: accounts.map((account) => ({
       id: account.id,
       name: account.name,
@@ -801,9 +784,10 @@ export async function getSettingsPageData(competitionId?: string) {
       updatedAt: account.updatedAt.toISOString(),
       assignmentCount: account.assignments.length,
       submittedCount: account.scores.length,
-      linkedTeamId: account.ownedTeam?.id ?? "",
-      linkedTeamLabel: account.ownedTeam ? `${account.ownedTeam.teamCode} · ${account.ownedTeam.teamName}` : "",
-      categoryName: account.ownedTeam?.category?.name ?? "",
+      ownedTeamCount: account.ownedTeams.length,
+      linkedTeamId: "",
+      linkedTeamLabel: "",
+      categoryName: account.ownedTeams.map((team) => team.category?.name).filter(Boolean).join(", "),
     })),
   };
 }
@@ -1086,10 +1070,10 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
   };
 }
 
-export async function getTeamPortalData(userId: string) {
-  const [settings, team] = await Promise.all([
+export async function getTeamPortalData(userId: string, requestedCompetitionId?: string) {
+  const [settings, teams, competitions] = await Promise.all([
     prisma.settings.findUnique({ where: { id: "default" } }),
-    prisma.team.findUnique({
+    prisma.team.findMany({
       where: { ownerUserId: userId },
       include: {
         category: {
@@ -1104,93 +1088,152 @@ export async function getTeamPortalData(userId: string) {
           orderBy: { updatedAt: "desc" },
         },
       },
+      orderBy: [{ updatedAt: "desc" }],
     }),
-  ]);
-
-  if (!team) {
-    return null;
-  }
-
-  const [competitions, categories] = await Promise.all([
     prisma.competition.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+        scoringPaused: false,
+      },
       select: {
         id: true,
         name: true,
       },
       orderBy: { name: "asc" },
     }),
-    prisma.category.findMany({
-      where: {
-        active: true,
-      },
-      include: {
-        competition: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: [{ competition: { name: "asc" } }, { displayOrder: "asc" }, { name: "asc" }],
-    }),
   ]);
 
-  const submittedJudgeCount = team.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
+  if (!competitions.length) {
+    return null;
+  }
+
+  const selectedCompetitionId =
+    requestedCompetitionId && competitions.some((competition) => competition.id === requestedCompetitionId)
+      ? requestedCompetitionId
+      : teams.find((team) => competitions.some((competition) => competition.id === team.category?.competitionId))?.category?.competitionId ??
+        competitions[0]?.id ??
+        "";
+  const selectedCompetition = competitions.find((competition) => competition.id === selectedCompetitionId);
+  const team = teams.find((entry) => entry.category?.competitionId === selectedCompetitionId) ?? null;
+  const openCompetitionIds = competitions.map((competition) => competition.id);
+
+  const categories = await prisma.category.findMany({
+    where: {
+      active: true,
+      competitionId: {
+        in: openCompetitionIds,
+      },
+    },
+    include: {
+      competition: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ competition: { name: "asc" } }, { displayOrder: "asc" }, { name: "asc" }],
+  });
+
+  const submittedJudgeCount =
+    team?.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length ?? 0;
   const averageScore =
-    submittedJudgeCount > 0
+    team && submittedJudgeCount > 0
       ? round(
           team.scores
             .filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED)
             .reduce((sum, score) => sum + score.weightedScore, 0) / submittedJudgeCount,
         )
       : 0;
+  const selectedCategory = categories.find((category) => category.competitionId === selectedCompetitionId);
+  const mappedCategories = categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    competitionId: category.competitionId,
+    competitionName: category.competition.name,
+  }));
 
   return {
     settings,
     competitions,
-    categories: categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-      competitionId: category.competitionId,
-      competitionName: category.competition.name,
+    selectedCompetitionId,
+    categories: mappedCategories,
+    submissions: teams.map((entry) => ({
+      id: entry.id,
+      teamCode: entry.teamCode,
+      teamName: entry.teamName,
+      competitionId: entry.category?.competitionId ?? "",
+      competitionName: entry.category?.competition?.name ?? "",
+      categoryName: entry.category?.name ?? "",
+      projectTitle: entry.projectTitle,
+      submissionStatus: entry.submissionStatus,
+      updatedAt: entry.updatedAt,
     })),
-    team: {
-      id: team.id,
-      teamCode: team.teamCode,
-      teamName: team.teamName,
-      competitionId: team.category?.competitionId ?? "",
-      competitionName: team.category?.competition?.name ?? "",
-      categoryId: team.categoryId ?? "",
-      categoryName: team.category?.name ?? "",
-      projectTitle: team.projectTitle,
-      projectDescription: team.projectDescription,
-      organization: team.organization ?? "",
-      teamMembers: team.teamMembers,
-      videoUrl: team.videoUrl ?? "",
-      imageUrl: team.imageUrl ?? "",
-      documentUrl: team.documentUrl ?? "",
-      documentName: team.documentName ?? "",
-      documentLinks: parseDocumentLinks(team.documentLinks, {
-        documentName: team.documentName,
-        documentUrl: team.documentUrl,
-      }),
-      submissionStatus: team.submissionStatus,
-      submittedAt: team.submittedAt,
-      approvedAt: team.approvedAt,
-      reviewNote: team.reviewNote ?? "",
-      updatedAt: team.updatedAt,
-      scores: team.scores.map((score) => ({
-        id: score.id,
-        judgeName: score.judge.name,
-        status: score.status,
-        averageScore: score.weightedScore,
-      })),
-      stats: {
-        submittedJudgeCount,
-        averageScore,
-      },
-    },
+    team: team
+      ? {
+          id: team.id,
+          teamCode: team.teamCode,
+          teamName: team.teamName,
+          competitionId: team.category?.competitionId ?? "",
+          competitionName: team.category?.competition?.name ?? "",
+          categoryId: team.categoryId ?? "",
+          categoryName: team.category?.name ?? "",
+          projectTitle: team.projectTitle,
+          projectDescription: team.projectDescription,
+          organization: team.organization ?? "",
+          teamMembers: team.teamMembers,
+          videoUrl: team.videoUrl ?? "",
+          imageUrl: team.imageUrl ?? "",
+          documentUrl: team.documentUrl ?? "",
+          documentName: team.documentName ?? "",
+          documentLinks: parseDocumentLinks(team.documentLinks, {
+            documentName: team.documentName,
+            documentUrl: team.documentUrl,
+          }),
+          submissionStatus: team.submissionStatus,
+          submittedAt: team.submittedAt,
+          approvedAt: team.approvedAt,
+          reviewNote: team.reviewNote ?? "",
+          updatedAt: team.updatedAt,
+          scores: team.scores.map((score) => ({
+            id: score.id,
+            judgeName: score.judge.name,
+            status: score.status,
+            averageScore: score.weightedScore,
+          })),
+          stats: {
+            submittedJudgeCount,
+            averageScore,
+          },
+        }
+      : {
+          id: "",
+          teamCode: "",
+          teamName: "",
+          competitionId: selectedCompetitionId,
+          competitionName: selectedCompetition?.name ?? "",
+          categoryId: selectedCategory?.id ?? "",
+          categoryName: selectedCategory?.name ?? "",
+          projectTitle: "",
+          projectDescription: "",
+          organization: "",
+          teamMembers: "",
+          videoUrl: "",
+          imageUrl: "",
+          documentUrl: "",
+          documentName: "",
+          documentLinks: [],
+          submissionStatus: ApprovalStatus.DRAFT,
+          submittedAt: null,
+          approvedAt: null,
+          reviewNote: "",
+          updatedAt: new Date(),
+          scores: [],
+          stats: {
+            submittedJudgeCount: 0,
+            averageScore: 0,
+          },
+        },
   };
 }
 

@@ -8,14 +8,20 @@ import { PageHeader } from "@/components/shared/page-header";
 import { getTeamPortalData } from "@/lib/data";
 import { getRequestI18n } from "@/lib/i18n-server";
 
-export default async function TeamResultsPage() {
+export default async function TeamResultsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const session = await auth();
 
   if (!session?.user) {
     redirect("/login");
   }
 
-  const data = await getTeamPortalData(session.user.id);
+  const params = await searchParams;
+  const competitionId = typeof params.competitionId === "string" ? params.competitionId : undefined;
+  const data = await getTeamPortalData(session.user.id, competitionId);
 
   if (!data) {
     redirect("/login");

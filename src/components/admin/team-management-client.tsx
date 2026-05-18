@@ -515,7 +515,7 @@ export function TeamManagementClient({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.teamCode}</label>
-              <Input value={form.teamCode} onChange={(event) => setForm((current) => ({ ...current, teamCode: event.target.value }))} />
+              <Input value={selectedTeam ? form.teamCode : t.autoTeamCode} disabled />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.teamName}</label>

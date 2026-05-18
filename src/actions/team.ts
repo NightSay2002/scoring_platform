@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { ApprovalStatus, Role } from "@prisma/client";
+import { ApprovalStatus, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
@@ -53,17 +53,8 @@ async function requireTeamUser() {
     throw new Error("Unauthorized");
   }
 
-  const team = await prisma.team.findUnique({
-    where: { ownerUserId: session.user.id },
-  });
-
-  if (!team) {
-    throw new Error("No team is linked to this account.");
-  }
-
   return {
     user: session.user,
-    team,
   };
 }
 
@@ -140,11 +131,26 @@ export async function uploadTeamAssetAction(formData: FormData) {
   };
 }
 
+async function generateNextTeamCode(tx: Prisma.TransactionClient) {
+  const teams = await tx.team.findMany({ select: { teamCode: true } });
+  const usedCodes = new Set(teams.map((team) => team.teamCode.trim()).filter(Boolean));
+  const maxNumericCode = teams.reduce((max, team) => {
+    const value = Number.parseInt(team.teamCode, 10);
+    return Number.isNaN(value) ? max : Math.max(max, value);
+  }, 0);
+  let nextCode = String(maxNumericCode + 1);
+
+  while (usedCodes.has(nextCode)) {
+    nextCode = String(Number.parseInt(nextCode, 10) + 1);
+  }
+
+  return nextCode;
+}
+
 function buildTeamData(parsed: ReturnType<typeof teamSchema.parse>) {
   const documentLinks = parsed.documentLinks === undefined ? undefined : normalizeDocumentLinks(parsed.documentLinks);
 
   return {
-    teamCode: parsed.teamCode.trim(),
     teamName: parsed.teamName.trim(),
     categoryId: parsed.categoryId,
     projectTitle: parsed.projectTitle.trim(),
@@ -185,9 +191,29 @@ async function validateCategoryCompetition(categoryId: string, competitionId: st
   return null;
 }
 
+async function validateOpenCompetition(competitionId: string) {
+  const competition = await prisma.competition.findUnique({
+    where: { id: competitionId },
+    select: {
+      active: true,
+      scoringPaused: true,
+    },
+  });
+
+  if (!competition || !competition.active) {
+    return "Competition not found.";
+  }
+
+  if (competition.scoringPaused) {
+    return "This competition has ended.";
+  }
+
+  return null;
+}
+
 export async function upsertTeamAction(payload: {
   id?: string;
-  teamCode: string;
+  teamCode?: string;
   teamName: string;
   competitionId: string;
   categoryId: string;
@@ -249,13 +275,6 @@ export async function upsertTeamAction(payload: {
             throw new Error("Selected owner account is not a team account.");
           }
 
-          await tx.team.updateMany({
-            where: {
-              ownerUserId,
-              ...(parsed.data.id ? { NOT: { id: parsed.data.id } } : {}),
-            },
-            data: { ownerUserId: null },
-          });
         }
 
         if (parsed.data.id) {
@@ -271,6 +290,7 @@ export async function upsertTeamAction(payload: {
           await tx.team.create({
             data: {
               ...data,
+              teamCode: await generateNextTeamCode(tx),
               ownerUserId,
               submissionStatus: parsed.data.submissionStatus ?? ApprovalStatus.DRAFT,
             },
@@ -1077,10 +1097,6 @@ export async function upsertUserAccountAction(payload: {
     return { error: parsed.error.issues[0]?.message ?? "Invalid account." };
   }
 
-  if (parsed.data.role === "TEAM" && !parsed.data.linkedTeamId) {
-    return { error: "A team account must be linked to a team submission." };
-  }
-
   try {
     if (parsed.data.id) {
       const currentUser = await prisma.user.findUnique({
@@ -1138,12 +1154,12 @@ export async function upsertUserAccountAction(payload: {
               },
             });
 
-        await tx.team.updateMany({
-          where: { ownerUserId: user.id },
-          data: { ownerUserId: null },
-        });
-
-        if (parsed.data.role === "TEAM" && parsed.data.linkedTeamId) {
+        if (parsed.data.role !== "TEAM") {
+          await tx.team.updateMany({
+            where: { ownerUserId: user.id },
+            data: { ownerUserId: null },
+          });
+        } else if (parsed.data.linkedTeamId) {
           await tx.team.update({
             where: { id: parsed.data.linkedTeamId },
             data: { ownerUserId: user.id },
@@ -1230,7 +1246,7 @@ export async function rejectTeamSubmissionAction(teamId: string, reviewNote?: st
 
 async function saveTeamSubmission(
   payload: {
-    teamCode: string;
+    teamCode?: string;
     teamName: string;
     competitionId: string;
     categoryId: string;
@@ -1246,19 +1262,17 @@ async function saveTeamSubmission(
   },
   mode: "draft" | "submit",
 ) {
-  const { team } = await requireTeamUser();
+  const { user } = await requireTeamUser();
 
-  const parsed = teamSchema.safeParse({
-    ...payload,
-    id: team.id,
-  });
+  const parsed = teamSchema.safeParse(payload);
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid submission data." };
   }
 
-  if (team.submissionStatus === ApprovalStatus.APPROVED) {
-    return { error: "This submission has already been approved by the admin." };
+  const competitionValidationError = await validateOpenCompetition(parsed.data.competitionId);
+  if (competitionValidationError) {
+    return { error: competitionValidationError };
   }
 
   const categoryValidationError = await validateCategoryCompetition(parsed.data.categoryId, parsed.data.competitionId);
@@ -1266,19 +1280,49 @@ async function saveTeamSubmission(
     return { error: categoryValidationError };
   }
 
-  const data = buildTeamData(parsed.data);
+  const team = await prisma.team.findFirst({
+    where: {
+      ownerUserId: user.id,
+      category: {
+        competitionId: parsed.data.competitionId,
+      },
+    },
+  });
+
+  if (team?.submissionStatus === ApprovalStatus.APPROVED) {
+    return { error: "This submission has already been approved by the admin." };
+  }
 
   const updated = await withSqliteWriteRetry(() =>
-    prisma.team.update({
-      where: { id: team.id },
-      data: {
-        ...data,
-        submissionStatus: mode === "submit" ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT,
-        submittedAt: mode === "submit" ? new Date() : team.submittedAt,
-        approvedAt: null,
-        approvedById: null,
-        reviewNote: mode === "submit" ? null : data.reviewNote,
-      },
+    prisma.$transaction(async (tx) => {
+      const data = buildTeamData(parsed.data);
+
+      if (team) {
+        return tx.team.update({
+          where: { id: team.id },
+          data: {
+            ...data,
+            submissionStatus: mode === "submit" ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT,
+            submittedAt: mode === "submit" ? new Date() : team.submittedAt,
+            approvedAt: null,
+            approvedById: null,
+            reviewNote: mode === "submit" ? null : data.reviewNote,
+          },
+        });
+      }
+
+      return tx.team.create({
+        data: {
+          ...data,
+          teamCode: await generateNextTeamCode(tx),
+          ownerUserId: user.id,
+          submissionStatus: mode === "submit" ? ApprovalStatus.PENDING : ApprovalStatus.DRAFT,
+          submittedAt: mode === "submit" ? new Date() : null,
+          approvedAt: null,
+          approvedById: null,
+          reviewNote: mode === "submit" ? null : data.reviewNote,
+        },
+      });
     }),
   );
 
@@ -1287,6 +1331,7 @@ async function saveTeamSubmission(
     success: true,
     team: {
       id: updated.id,
+      teamCode: updated.teamCode,
       submissionStatus: updated.submissionStatus,
       updatedAt: updated.updatedAt.toISOString(),
     },
@@ -1294,7 +1339,7 @@ async function saveTeamSubmission(
 }
 
 export async function saveTeamDraftAction(payload: {
-  teamCode: string;
+  teamCode?: string;
   teamName: string;
   competitionId: string;
   categoryId: string;
@@ -1312,7 +1357,7 @@ export async function saveTeamDraftAction(payload: {
 }
 
 export async function submitTeamForApprovalAction(payload: {
-  teamCode: string;
+  teamCode?: string;
   teamName: string;
   competitionId: string;
   categoryId: string;
