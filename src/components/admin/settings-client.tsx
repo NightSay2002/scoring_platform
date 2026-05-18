@@ -1253,8 +1253,8 @@ export function SettingsClient({
                         <Button variant="ghost" size="sm" onClick={() => editAccount(account)}>
                           {common.actions.edit}
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => removeAccount(account)}>
-                          <Trash2 className="h-4 w-4 text-rose-600" />
+                        <Button variant="ghost" size="sm" onClick={() => removeAccount(account)} aria-label={`${common.actions.delete} ${account.name}`} title={common.actions.delete}>
+                          <Trash2 className="h-4 w-4 text-rose-600" aria-hidden="true" />
                         </Button>
                       </div>
                     </TD>
