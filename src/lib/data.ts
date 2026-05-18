@@ -922,10 +922,11 @@ export async function getJudgeDashboardData(userId: string) {
   const scorableTeams = teams.filter((team) =>
     canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId),
   );
-  const visibleTeams =
+  const visibleTeams = (
     !isChiefJudge && settings?.judgeScope === "ASSIGNED"
       ? scorableTeams.filter((team) => team.assignments.length > 0)
-      : scorableTeams;
+      : scorableTeams
+  ).slice().sort(compareTeamCode);
   const submittedCount = judge.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
   const draftCount = judge.scores.filter((score) => score.status === ScoreStatus.DRAFT).length;
   const completionRate = visibleTeams.length ? round((submittedCount / visibleTeams.length) * 100, 0) : 0;
@@ -1105,10 +1106,11 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
     return null;
   }
 
-  const visibleTeams =
+  const visibleTeams = (
     isChiefJudge || settings?.judgeScope === "ALL"
       ? scorableAllTeams
-      : scorableAllTeams.filter((entry) => entry.assignments.length > 0);
+      : scorableAllTeams.filter((entry) => entry.assignments.length > 0)
+  ).slice().sort(compareTeamCode);
   const currentIndex = visibleTeams.findIndex((entry) => entry.id === teamId);
   const submittedCount = visibleTeams.filter((entry) =>
     entry.scores.some((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED),
