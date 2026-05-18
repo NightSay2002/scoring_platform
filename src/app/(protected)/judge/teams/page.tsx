@@ -114,6 +114,7 @@ export default async function JudgeTeamsPage({
                   <TH>{t.category}</TH>
                   <TH>{t.projectTitle}</TH>
                   <TH>{t.status}</TH>
+                  <TH>{t.scoreColumn}</TH>
                   <TH>{t.updated}</TH>
                   <TH>{t.action}</TH>
                 </tr>
@@ -133,6 +134,7 @@ export default async function JudgeTeamsPage({
                         {team.status === "PENDING" ? common.statuses.pending : common.statuses[team.status.toLowerCase() as "draft" | "submitted" | "edited"]}
                       </Badge>
                     </TD>
+                    <TD>{team.score.toFixed(2)}</TD>
                     <TD>{formatRelativeTime(team.updatedAt, locale)}</TD>
                     <TD>
                       <Link href={`/judge/teams/${team.id}`} className="text-sm font-medium text-sky-700">

@@ -924,6 +924,7 @@ export async function getJudgeDashboardData(userId: string) {
       categoryName: team.category?.name ?? "Uncategorized",
       projectTitle: team.projectTitle,
       status: (team.scores[0]?.status ?? "PENDING") as ScoreStatus | "PENDING",
+      score: round(team.scores[0]?.weightedScore ?? 0),
       updatedAt: team.scores[0]?.updatedAt ?? team.updatedAt,
     })),
     stats: {
