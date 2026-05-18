@@ -22,6 +22,20 @@ import {
   userAccountSchema,
 } from "@/lib/validators";
 
+const staleAdminPageResult = {
+  stale: true,
+  error: "This page has been updated by another admin. Please refresh and try again.",
+} as const;
+
+function isStaleVersion(currentUpdatedAt: Date | null | undefined, expectedUpdatedAt?: string) {
+  if (!expectedUpdatedAt || !currentUpdatedAt) {
+    return false;
+  }
+
+  const expectedTime = new Date(expectedUpdatedAt).getTime();
+  return Number.isNaN(expectedTime) || currentUpdatedAt.getTime() !== expectedTime;
+}
+
 async function requireAdmin() {
   const session = await auth();
 
@@ -189,6 +203,7 @@ export async function upsertTeamAction(payload: {
   ownerUserId?: string;
   submissionStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
   reviewNote?: string;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
 
@@ -200,6 +215,21 @@ export async function upsertTeamAction(payload: {
   const categoryValidationError = await validateCategoryCompetition(parsed.data.categoryId, parsed.data.competitionId);
   if (categoryValidationError) {
     return { error: categoryValidationError };
+  }
+
+  if (parsed.data.id) {
+    const currentTeam = await prisma.team.findUnique({
+      where: { id: parsed.data.id },
+      select: { updatedAt: true },
+    });
+
+    if (!currentTeam) {
+      return { error: "Team not found." };
+    }
+
+    if (isStaleVersion(currentTeam.updatedAt, payload.expectedUpdatedAt)) {
+      return staleAdminPageResult;
+    }
   }
 
   const data = buildTeamData(parsed.data);
@@ -260,8 +290,21 @@ export async function upsertTeamAction(payload: {
   return { success: true };
 }
 
-export async function deleteTeamAction(teamId: string) {
+export async function deleteTeamAction(teamId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const currentTeam = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { updatedAt: true },
+  });
+
+  if (!currentTeam) {
+    return { error: "Team not found." };
+  }
+
+  if (isStaleVersion(currentTeam.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   await withSqliteWriteRetry(() => prisma.team.delete({ where: { id: teamId } }));
 
   revalidateAppData();
@@ -278,6 +321,7 @@ export async function upsertCriterionAction(payload: {
   weight: number;
   displayOrder: number;
   active: boolean;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
   const parsed = criterionSchema.safeParse(payload);
@@ -299,6 +343,21 @@ export async function upsertCriterionAction(payload: {
 
       if (!category) {
         return { error: "Category not found." };
+      }
+
+      if (parsed.data.id) {
+        const currentCriterion = await tx.criterion.findUnique({
+          where: { id: parsed.data.id },
+          select: { updatedAt: true },
+        });
+
+        if (!currentCriterion) {
+          return { error: "Criterion not found." };
+        }
+
+        if (isStaleVersion(currentCriterion.updatedAt, payload.expectedUpdatedAt)) {
+          return staleAdminPageResult;
+        }
       }
 
       const activeWeight = await tx.criterion.aggregate({
@@ -344,7 +403,7 @@ export async function upsertCriterionAction(payload: {
   );
 
   if ("error" in result && result.error) {
-    return { error: result.error };
+    return result;
   }
 
   revalidateAppData();
@@ -369,6 +428,7 @@ export async function upsertCriterionSubItemAction(payload: {
   weight: number;
   displayOrder: number;
   active: boolean;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
   const parsed = criterionSubItemSchema.safeParse(payload);
@@ -390,6 +450,21 @@ export async function upsertCriterionSubItemAction(payload: {
 
       if (!criterion) {
         return { error: "Parent criterion not found." };
+      }
+
+      if (parsed.data.id) {
+        const currentSubCriterion = await tx.criterionSubItem.findUnique({
+          where: { id: parsed.data.id },
+          select: { updatedAt: true },
+        });
+
+        if (!currentSubCriterion) {
+          return { error: "Sub-criterion not found." };
+        }
+
+        if (isStaleVersion(currentSubCriterion.updatedAt, payload.expectedUpdatedAt)) {
+          return staleAdminPageResult;
+        }
       }
 
       const activeWeight = await tx.criterionSubItem.aggregate({
@@ -435,7 +510,7 @@ export async function upsertCriterionSubItemAction(payload: {
   );
 
   if ("error" in result && result.error) {
-    return { error: result.error };
+    return result;
   }
 
   revalidateAppData();
@@ -457,6 +532,7 @@ export async function upsertCategoryAction(payload: {
   description?: string;
   displayOrder: number;
   active: boolean;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
   const parsed = categorySchema.safeParse(payload);
@@ -475,6 +551,19 @@ export async function upsertCategoryAction(payload: {
 
   try {
     if (parsed.data.id) {
+      const currentCategory = await prisma.category.findUnique({
+        where: { id: parsed.data.id },
+        select: { updatedAt: true },
+      });
+
+      if (!currentCategory) {
+        return { error: "Category not found." };
+      }
+
+      if (isStaleVersion(currentCategory.updatedAt, payload.expectedUpdatedAt)) {
+        return staleAdminPageResult;
+      }
+
       await withSqliteWriteRetry(() =>
         prisma.category.update({
           where: { id: parsed.data.id },
@@ -508,6 +597,7 @@ export async function updateSettingsAction(payload: {
   judgeScope: "ALL" | "ASSIGNED";
   submissionDeadline?: string;
   exportIncludeComments: boolean;
+  expectedSettingsUpdatedAt?: string;
 }) {
   await requireAdmin();
   const parsed = settingsSchema.safeParse(payload);
@@ -526,12 +616,16 @@ export async function updateSettingsAction(payload: {
   }
 
   const currentSettings = await prisma.settings.findUnique({ where: { id: "default" } });
+  if (isStaleVersion(currentSettings?.updatedAt, payload.expectedSettingsUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
   const nextDeadline = parsed.data.submissionDeadline ? new Date(parsed.data.submissionDeadline) : null;
   const deadlineChanged =
     (currentSettings?.submissionDeadline?.getTime() ?? null) !== (nextDeadline?.getTime() ?? null) ||
     currentSettings?.competitionId !== competition.id;
 
-  await withSqliteWriteRetry(() =>
+  const updatedSettings = await withSqliteWriteRetry(() =>
     prisma.settings.upsert({
       where: { id: "default" },
       create: {
@@ -571,10 +665,10 @@ export async function updateSettingsAction(payload: {
   }
 
   revalidateAppData();
-  return { success: true };
+  return { success: true, settingsUpdatedAt: updatedSettings.updatedAt.toISOString() };
 }
 
-export async function toggleCompetitionScoringAction(resume: boolean, competitionId?: string) {
+export async function toggleCompetitionScoringAction(resume: boolean, competitionId?: string, expectedCompetitionUpdatedAt?: string) {
   await requireAdmin();
 
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
@@ -583,7 +677,20 @@ export async function toggleCompetitionScoringAction(resume: boolean, competitio
     return { error: "Please select a competition before changing scoring status." };
   }
 
-  await withSqliteWriteRetry(() =>
+  const competition = await prisma.competition.findUnique({
+    where: { id: targetCompetitionId },
+    select: { updatedAt: true },
+  });
+
+  if (!competition) {
+    return { error: "Competition not found." };
+  }
+
+  if (isStaleVersion(competition.updatedAt, expectedCompetitionUpdatedAt)) {
+    return staleAdminPageResult;
+  }
+
+  const updatedCompetition = await withSqliteWriteRetry(() =>
     prisma.competition.update({
       where: { id: targetCompetitionId },
       data: resume
@@ -599,13 +706,14 @@ export async function toggleCompetitionScoringAction(resume: boolean, competitio
   );
 
   revalidateAppData();
-  return { success: true };
+  return { success: true, competitionUpdatedAt: updatedCompetition.updatedAt.toISOString() };
 }
 
 export async function setCompetitionScorerStatusAction(payload: {
   competitionId: string;
   userId: string;
   canScore: boolean;
+  expectedCanScore?: boolean;
 }) {
   await requireAdmin();
 
@@ -616,7 +724,7 @@ export async function setCompetitionScorerStatusAction(payload: {
     return { error: "Invalid scoring participant payload." };
   }
 
-  const [competition, user] = await Promise.all([
+  const [competition, user, currentScorerStatus] = await Promise.all([
     prisma.competition.findUnique({
       where: { id: competitionId },
       select: { id: true },
@@ -624,6 +732,15 @@ export async function setCompetitionScorerStatusAction(payload: {
     prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true, active: true },
+    }),
+    prisma.competitionScorer.findUnique({
+      where: {
+        competitionId_userId: {
+          competitionId,
+          userId,
+        },
+      },
+      select: { canScore: true },
     }),
   ]);
 
@@ -633,6 +750,11 @@ export async function setCompetitionScorerStatusAction(payload: {
 
   if (!user || !user.active || (user.role !== Role.ADMIN && user.role !== Role.JUDGE)) {
     return { error: "Selected account cannot be a scoring participant." };
+  }
+
+  const currentCanScore = currentScorerStatus?.canScore ?? true;
+  if (typeof payload.expectedCanScore === "boolean" && currentCanScore !== payload.expectedCanScore) {
+    return staleAdminPageResult;
   }
 
   await withSqliteWriteRetry(() =>
@@ -697,6 +819,7 @@ export async function updateCompetitionAction(payload: {
   id: string;
   name: string;
   description?: string;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
 
@@ -711,7 +834,20 @@ export async function updateCompetitionAction(payload: {
   }
 
   try {
-    await withSqliteWriteRetry(() =>
+    const currentCompetition = await prisma.competition.findUnique({
+      where: { id: parsed.data.id },
+      select: { updatedAt: true },
+    });
+
+    if (!currentCompetition) {
+      return { error: "Competition not found." };
+    }
+
+    if (isStaleVersion(currentCompetition.updatedAt, payload.expectedUpdatedAt)) {
+      return staleAdminPageResult;
+    }
+
+    const updatedCompetition = await withSqliteWriteRetry(() =>
       prisma.$transaction(async (tx) => {
         const competition = await tx.competition.update({
           where: { id: parsed.data.id },
@@ -719,18 +855,20 @@ export async function updateCompetitionAction(payload: {
             name: parsed.data.name.trim(),
             description: parsed.data.description?.trim() || null,
           },
-          select: { id: true, name: true },
+          select: { id: true, name: true, updatedAt: true },
         });
 
         await tx.settings.updateMany({
           where: { competitionId: competition.id },
           data: { competitionName: competition.name },
         });
+
+        return competition;
       }),
     );
 
     revalidateAppData();
-    return { success: true };
+    return { success: true, competitionUpdatedAt: updatedCompetition.updatedAt.toISOString() };
   } catch {
     return { error: "Unable to update competition. Check for duplicate competition name." };
   }
@@ -869,6 +1007,7 @@ export async function upsertUserAccountAction(payload: {
   role: "ADMIN" | "JUDGE" | "TEAM";
   active: boolean;
   linkedTeamId?: string;
+  expectedUpdatedAt?: string;
 }) {
   await requireAdmin();
 
@@ -882,6 +1021,21 @@ export async function upsertUserAccountAction(payload: {
   }
 
   try {
+    if (parsed.data.id) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: parsed.data.id },
+        select: { updatedAt: true },
+      });
+
+      if (!currentUser) {
+        return { error: "Account not found." };
+      }
+
+      if (isStaleVersion(currentUser.updatedAt, payload.expectedUpdatedAt)) {
+        return staleAdminPageResult;
+      }
+    }
+
     await withSqliteWriteRetry(() =>
       prisma.$transaction(async (tx) => {
         if (parsed.data.role === "TEAM" && parsed.data.linkedTeamId) {
@@ -948,7 +1102,7 @@ export async function upsertUserAccountAction(payload: {
   return { success: true };
 }
 
-export async function approveTeamSubmissionAction(teamId: string) {
+export async function approveTeamSubmissionAction(teamId: string, expectedUpdatedAt?: string) {
   const admin = await requireAdmin();
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -960,6 +1114,10 @@ export async function approveTeamSubmissionAction(teamId: string) {
 
   if (!team.categoryId) {
     return { error: "Team must be assigned to a category before approval." };
+  }
+
+  if (isStaleVersion(team.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
   }
 
   await withSqliteWriteRetry(() =>
@@ -978,8 +1136,20 @@ export async function approveTeamSubmissionAction(teamId: string) {
   return { success: true };
 }
 
-export async function rejectTeamSubmissionAction(teamId: string, reviewNote?: string) {
+export async function rejectTeamSubmissionAction(teamId: string, reviewNote?: string, expectedUpdatedAt?: string) {
   await requireAdmin();
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { updatedAt: true },
+  });
+
+  if (!team) {
+    return { error: "Team not found." };
+  }
+
+  if (isStaleVersion(team.updatedAt, expectedUpdatedAt)) {
+    return staleAdminPageResult;
+  }
 
   await withSqliteWriteRetry(() =>
     prisma.team.update({

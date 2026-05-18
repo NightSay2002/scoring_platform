@@ -38,6 +38,7 @@ type SettingsValue = {
   scoringPaused: boolean;
   deadlineOverride: boolean;
   exportIncludeComments: boolean;
+  updatedAt: string;
 };
 
 type Competition = {
@@ -45,6 +46,7 @@ type Competition = {
   name: string;
   description: string | null;
   active: boolean;
+  updatedAt: string;
   images: CompetitionImage[];
 };
 
@@ -65,6 +67,7 @@ type SubCriterion = {
   weight: number;
   displayOrder: number;
   active: boolean;
+  updatedAt: string;
 };
 
 type Criterion = {
@@ -78,6 +81,7 @@ type Criterion = {
   weight: number;
   displayOrder: number;
   active: boolean;
+  updatedAt: string;
   subCriteria: SubCriterion[];
 };
 
@@ -88,6 +92,7 @@ type Category = {
   description: string | null;
   displayOrder: number;
   active: boolean;
+  updatedAt: string;
 };
 
 type Account = {
@@ -96,6 +101,7 @@ type Account = {
   email: string;
   role: "ADMIN" | "JUDGE" | "TEAM";
   active: boolean;
+  updatedAt: string;
   assignmentCount: number;
   submittedCount: number;
   linkedTeamId: string;
@@ -153,6 +159,7 @@ export function SettingsClient({
   const [competitionDetailsForm, setCompetitionDetailsForm] = useState({
     name: initialCompetition?.name ?? "",
     description: initialCompetition?.description ?? "",
+    expectedUpdatedAt: initialCompetition?.updatedAt ?? "",
   });
 
   const [criterionForm, setCriterionForm] = useState({
@@ -165,6 +172,7 @@ export function SettingsClient({
     weight: 0,
     displayOrder: criteria.length + 1,
     active: true,
+    expectedUpdatedAt: "",
   });
 
   const [subCriterionForm, setSubCriterionForm] = useState({
@@ -177,6 +185,7 @@ export function SettingsClient({
     weight: 0,
     displayOrder: 1,
     active: true,
+    expectedUpdatedAt: "",
   });
 
   const [categoryForm, setCategoryForm] = useState({
@@ -186,6 +195,7 @@ export function SettingsClient({
     description: "",
     displayOrder: categories.length + 1,
     active: true,
+    expectedUpdatedAt: "",
   });
 
   const [accountForm, setAccountForm] = useState({
@@ -196,8 +206,10 @@ export function SettingsClient({
     role: "JUDGE" as "ADMIN" | "JUDGE" | "TEAM",
     active: true,
     linkedTeamId: "",
+    expectedUpdatedAt: "",
   });
   const [criteriaFilterCategoryId, setCriteriaFilterCategoryId] = useState("");
+  const [settingsUpdatedAt, setSettingsUpdatedAt] = useState(settings?.updatedAt ?? "");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -254,6 +266,7 @@ export function SettingsClient({
     setCompetitionDetailsForm({
       name: nextCompetition?.name ?? "",
       description: nextCompetition?.description ?? "",
+      expectedUpdatedAt: nextCompetition?.updatedAt ?? "",
     });
     setCategoryForm({
       id: "",
@@ -262,6 +275,7 @@ export function SettingsClient({
       description: "",
       displayOrder: 1,
       active: true,
+      expectedUpdatedAt: "",
     });
     setCriterionForm({
       id: "",
@@ -273,6 +287,7 @@ export function SettingsClient({
       weight: 0,
       displayOrder: 1,
       active: true,
+      expectedUpdatedAt: "",
     });
     setSubCriterionForm({
       id: "",
@@ -284,6 +299,7 @@ export function SettingsClient({
       weight: 0,
       displayOrder: 1,
       active: true,
+      expectedUpdatedAt: "",
     });
     setCriteriaFilterCategoryId("");
 
@@ -312,8 +328,17 @@ export function SettingsClient({
         judgeScope: settingsForm.judgeScope,
         submissionDeadline: settingsForm.submissionDeadline,
         exportIncludeComments: settingsForm.exportIncludeComments,
+        expectedSettingsUpdatedAt: settingsUpdatedAt,
       });
-      setMessage(result?.error ?? t.settingsUpdated);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      if (result && "settingsUpdatedAt" in result) {
+        setSettingsUpdatedAt(result.settingsUpdatedAt ?? "");
+      }
+      setMessage(t.settingsUpdated);
     });
   }
 
@@ -348,12 +373,16 @@ export function SettingsClient({
         id: settingsForm.competitionId,
         name: competitionDetailsForm.name,
         description: competitionDetailsForm.description,
+        expectedUpdatedAt: competitionDetailsForm.expectedUpdatedAt,
       });
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
+      if (result && "competitionUpdatedAt" in result) {
+        setCompetitionDetailsForm((current) => ({ ...current, expectedUpdatedAt: result.competitionUpdatedAt ?? "" }));
+      }
       setMessage(t.competitionUpdated);
       router.refresh();
     });
@@ -413,7 +442,7 @@ export function SettingsClient({
         displayOrder: Number(criterionForm.displayOrder),
       });
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
@@ -428,6 +457,7 @@ export function SettingsClient({
         weight: 0,
         displayOrder: criteria.filter((item) => item.categoryId === criterionForm.categoryId).length + 1,
         active: true,
+        expectedUpdatedAt: "",
       });
     });
   }
@@ -447,7 +477,7 @@ export function SettingsClient({
         displayOrder: Number(subCriterionForm.displayOrder),
       });
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
@@ -462,6 +492,7 @@ export function SettingsClient({
         weight: 0,
         displayOrder: (selectedCriterionForSubItems?.subCriteria.length ?? 0) + 1,
         active: true,
+        expectedUpdatedAt: "",
       });
     });
   }
@@ -478,7 +509,7 @@ export function SettingsClient({
         competitionId: settingsForm.competitionId,
       });
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
@@ -490,6 +521,7 @@ export function SettingsClient({
         description: "",
         displayOrder: categories.length + 1,
         active: true,
+        expectedUpdatedAt: "",
       });
     });
   }
@@ -498,7 +530,7 @@ export function SettingsClient({
     startTransition(async () => {
       const result = await upsertUserAccountAction(accountForm);
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
@@ -511,6 +543,7 @@ export function SettingsClient({
         role: "JUDGE",
         active: true,
         linkedTeamId: "",
+        expectedUpdatedAt: "",
       });
     });
   }
@@ -526,6 +559,7 @@ export function SettingsClient({
       weight: item.weight,
       displayOrder: item.displayOrder,
       active: item.active,
+      expectedUpdatedAt: item.updatedAt,
     });
     setSubCriterionForm((current) => ({
       ...current,
@@ -538,6 +572,7 @@ export function SettingsClient({
       weight: 0,
       displayOrder: item.subCriteria.length + 1,
       active: true,
+      expectedUpdatedAt: "",
     }));
   }
 
@@ -552,6 +587,7 @@ export function SettingsClient({
       weight: item.weight,
       displayOrder: item.displayOrder,
       active: item.active,
+      expectedUpdatedAt: item.updatedAt,
     });
   }
 
@@ -563,6 +599,7 @@ export function SettingsClient({
       description: item.description ?? "",
       displayOrder: item.displayOrder,
       active: item.active,
+      expectedUpdatedAt: item.updatedAt,
     });
   }
 
@@ -575,6 +612,7 @@ export function SettingsClient({
       role: item.role,
       active: item.active,
       linkedTeamId: item.linkedTeamId,
+      expectedUpdatedAt: item.updatedAt,
     });
   }
 
@@ -637,7 +675,7 @@ export function SettingsClient({
 
       const nextCompetitionId = result?.nextCompetitionId ?? "";
       setMessage(t.competitionDeleted);
-      setCompetitionDetailsForm({ name: "", description: "" });
+      setCompetitionDetailsForm({ name: "", description: "", expectedUpdatedAt: "" });
       setSettingsForm((current) => ({ ...current, competitionId: nextCompetitionId }));
 
       const nextParams = new URLSearchParams(searchParams.toString());
@@ -1030,6 +1068,7 @@ export function SettingsClient({
                         minScore: nextCriterion?.minScore ?? 0,
                         maxScore: nextCriterion?.maxScore ?? 100,
                         displayOrder: (nextCriterion?.subCriteria.length ?? 0) + 1,
+                        expectedUpdatedAt: "",
                       }));
                     }}
                     className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"

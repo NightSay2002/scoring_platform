@@ -71,17 +71,20 @@ export default async function AdminLeaderboardPage({
                 adminRole: messages.header.role.ADMIN,
                 judgeRole: messages.header.role.JUDGE,
                 scorerUpdated: t.scorerUpdated,
+                stalePageRefresh: t.stalePageRefresh,
                 close: t.close,
               }}
             />
             <ScoringToggleButton
               isClosed={data.scoringAvailability.scoringClosed}
               competitionId={data.selectedCompetitionId}
+              competitionUpdatedAt={data.selectedCompetitionUpdatedAt}
               labels={{
                 endCompetition: t.endCompetition,
                 continueCompetition: t.continueCompetition,
                 competitionEnded: t.competitionEnded,
                 competitionContinued: t.competitionContinued,
+                stalePageRefresh: t.stalePageRefresh,
               }}
             />
           </form>

@@ -42,7 +42,7 @@ type TeamRow = {
   submittedCount: number;
   expectedCount: number;
   averageScore: number;
-  updatedAt: Date;
+  updatedAt: string;
 };
 
 type Category = {
@@ -85,6 +85,7 @@ const emptyForm = {
   documentName: "",
   documentLinks: [] as DocumentLink[],
   reviewNote: "",
+  expectedUpdatedAt: "",
 };
 
 function syncDocumentFields(documentLinks: DocumentLink[]) {
@@ -180,6 +181,7 @@ export function TeamManagementClient({
       documentName: team.documentName,
       documentLinks: team.documentLinks,
       reviewNote: team.reviewNote,
+      expectedUpdatedAt: team.updatedAt,
     });
     setAvatarFileName("");
     setDocumentFileName(team.documentName);
@@ -234,7 +236,7 @@ export function TeamManagementClient({
         ...syncDocumentFields(documentLinks),
       });
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
         return;
       }
 
@@ -307,30 +309,40 @@ export function TeamManagementClient({
     }));
   }
 
-  async function handleDelete(teamId: string) {
+  async function handleDelete(team: TeamRow) {
     if (!window.confirm(t.confirmDeleteTeam)) {
       return;
     }
 
     startTransition(async () => {
-      await deleteTeamAction(teamId);
+      const result = await deleteTeamAction(team.id, team.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.teamDeleted);
       startCreate();
     });
   }
 
-  async function handleApprove(teamId: string) {
+  async function handleApprove(team: TeamRow) {
     startTransition(async () => {
-      const result = await approveTeamSubmissionAction(teamId);
-      setMessage(result?.error ?? t.teamApproved);
+      const result = await approveTeamSubmissionAction(team.id, team.updatedAt);
+      setMessage(result && "stale" in result && result.stale ? t.stalePageRefresh : result?.error ?? t.teamApproved);
     });
   }
 
-  async function handleReject(teamId: string) {
+  async function handleReject(team: TeamRow) {
     const reviewNote = window.prompt(t.rejectPrompt, t.rejectDefaultNote);
 
     startTransition(async () => {
-      await rejectTeamSubmissionAction(teamId, reviewNote ?? undefined);
+      const result = await rejectTeamSubmissionAction(team.id, reviewNote ?? undefined, team.updatedAt);
+      if (result?.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
       setMessage(t.teamRejected);
     });
   }
@@ -458,19 +470,19 @@ export function TeamManagementClient({
                           </a>
                         ) : null}
                         {team.submissionStatus !== "APPROVED" ? (
-                          <Button variant="ghost" size="sm" onClick={() => handleApprove(team.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => handleApprove(team)}>
                             <ShieldCheck className="h-4 w-4 text-emerald-600" />
                           </Button>
                         ) : null}
                         {team.submissionStatus !== "REJECTED" ? (
-                          <Button variant="ghost" size="sm" onClick={() => handleReject(team.id)}>
+                          <Button variant="ghost" size="sm" onClick={() => handleReject(team)}>
                             <XCircle className="h-4 w-4 text-rose-600" />
                           </Button>
                         ) : null}
                         <Button variant="ghost" size="sm" onClick={() => startEdit(team)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(team.id)}>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(team)}>
                           <Trash2 className="h-4 w-4 text-rose-600" />
                         </Button>
                       </div>

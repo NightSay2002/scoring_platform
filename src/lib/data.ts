@@ -497,7 +497,7 @@ export async function getTeamsManagementData() {
         expectedCount: metrics.expectedJudgeIds.length,
         averageScore: metrics.averageScore,
         weightedScore: metrics.weightedScore,
-        updatedAt: team.updatedAt,
+        updatedAt: team.updatedAt.toISOString(),
       };
     }),
     competitions,
@@ -653,6 +653,7 @@ export async function getLeaderboardData(competitionId?: string) {
     scoringAvailability: getScoringAvailability(settings, selectedCompetition),
     competitions,
     selectedCompetitionId: selectedCompetitionId ?? "",
+    selectedCompetitionUpdatedAt: selectedCompetition?.updatedAt.toISOString() ?? "",
     overallRows,
     categorySections,
     judges,
@@ -735,8 +736,25 @@ export async function getSettingsPageData(competitionId?: string) {
   ]);
 
   return {
-    settings,
-    competitions,
+    settings: settings
+      ? {
+          ...settings,
+          updatedAt: settings.updatedAt.toISOString(),
+        }
+      : null,
+    competitions: competitions.map((competition) => ({
+      id: competition.id,
+      name: competition.name,
+      description: competition.description,
+      active: competition.active,
+      updatedAt: competition.updatedAt.toISOString(),
+      images: competition.images.map((image) => ({
+        id: image.id,
+        imageUrl: image.imageUrl,
+        imageName: image.imageName,
+        displayOrder: image.displayOrder,
+      })),
+    })),
     selectedCompetitionId: selectedCompetitionId ?? "",
     criteria: criteria.map((criterion) => ({
       id: criterion.id,
@@ -749,6 +767,7 @@ export async function getSettingsPageData(competitionId?: string) {
       weight: criterion.weight,
       displayOrder: criterion.displayOrder,
       active: criterion.active,
+      updatedAt: criterion.updatedAt.toISOString(),
       subCriteria: criterion.subCriteria.map((subCriterion) => ({
         id: subCriterion.id,
         criterionId: subCriterion.criterionId,
@@ -759,9 +778,18 @@ export async function getSettingsPageData(competitionId?: string) {
         weight: subCriterion.weight,
         displayOrder: subCriterion.displayOrder,
         active: subCriterion.active,
+        updatedAt: subCriterion.updatedAt.toISOString(),
       })),
     })),
-    categories,
+    categories: categories.map((category) => ({
+      id: category.id,
+      competitionId: category.competitionId,
+      name: category.name,
+      description: category.description,
+      displayOrder: category.displayOrder,
+      active: category.active,
+      updatedAt: category.updatedAt.toISOString(),
+    })),
     teams,
     accounts: accounts.map((account) => ({
       id: account.id,
@@ -769,6 +797,7 @@ export async function getSettingsPageData(competitionId?: string) {
       email: account.email,
       role: account.role,
       active: account.active,
+      updatedAt: account.updatedAt.toISOString(),
       assignmentCount: account.assignments.length,
       submittedCount: account.scores.length,
       linkedTeamId: account.ownedTeam?.id ?? "",

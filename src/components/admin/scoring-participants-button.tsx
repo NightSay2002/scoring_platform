@@ -31,6 +31,7 @@ export function ScoringParticipantsButton({
     adminRole: string;
     judgeRole: string;
     scorerUpdated: string;
+    stalePageRefresh: string;
     close: string;
   };
 }) {
@@ -42,6 +43,7 @@ export function ScoringParticipantsButton({
   const router = useRouter();
 
   function updateStatus(userId: string, canScore: boolean) {
+    const participant = localParticipants.find((entry) => entry.id === userId);
     setPendingUserId(userId);
     setMessage("");
 
@@ -50,10 +52,11 @@ export function ScoringParticipantsButton({
         competitionId,
         userId,
         canScore,
+        expectedCanScore: participant?.canScore,
       });
 
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? labels.stalePageRefresh : result.error);
         setPendingUserId(null);
         return;
       }

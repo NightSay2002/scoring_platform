@@ -9,29 +9,36 @@ import { Button } from "@/components/shared/button";
 export function ScoringToggleButton({
   isClosed,
   competitionId,
+  competitionUpdatedAt,
   labels,
 }: {
   isClosed: boolean;
   competitionId: string;
+  competitionUpdatedAt: string;
   labels: {
     endCompetition: string;
     continueCompetition: string;
     competitionEnded: string;
     competitionContinued: string;
+    stalePageRefresh: string;
   };
 }) {
   const [closed, setClosed] = useState(isClosed);
+  const [currentCompetitionUpdatedAt, setCurrentCompetitionUpdatedAt] = useState(competitionUpdatedAt);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
   function toggleScoring() {
     startTransition(async () => {
-      const result = await toggleCompetitionScoringAction(closed, competitionId);
+      const result = await toggleCompetitionScoringAction(closed, competitionId, currentCompetitionUpdatedAt);
       if (result?.error) {
-        setMessage(result.error);
+        setMessage("stale" in result && result.stale ? labels.stalePageRefresh : result.error);
         return;
       }
 
+      if (result && "competitionUpdatedAt" in result) {
+        setCurrentCompetitionUpdatedAt(result.competitionUpdatedAt ?? "");
+      }
       setClosed((current) => !current);
       setMessage(closed ? labels.competitionContinued : labels.competitionEnded);
     });
