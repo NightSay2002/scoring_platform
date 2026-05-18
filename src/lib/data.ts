@@ -1,4 +1,4 @@
-﻿import { ApprovalStatus, Prisma, ScoreStatus } from "@prisma/client";
+﻿import { ApprovalStatus, Prisma, Role, ScoreStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -39,6 +39,46 @@ const teamInclude = {
 } satisfies Prisma.TeamInclude;
 
 type TeamWithRelations = Prisma.TeamGetPayload<{ include: typeof teamInclude }>;
+type ScoringParticipant = { id: string; name: string; role: Role; canScore: boolean };
+type CompetitionScorerStatus = { competitionId: string; userId: string; canScore: boolean };
+
+const scoringParticipantWhere = {
+  role: { in: [Role.ADMIN, Role.JUDGE] },
+  active: true,
+} satisfies Prisma.UserWhereInput;
+
+function getCompetitionScoringParticipants(
+  users: Array<{ id: string; name: string; role: Role }>,
+  statuses: CompetitionScorerStatus[],
+  competitionId: string | null | undefined,
+) {
+  return users.map((user) => {
+    const status = statuses.find((entry) => entry.userId === user.id && entry.competitionId === competitionId);
+
+    return {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      canScore: status?.canScore ?? true,
+    };
+  });
+}
+
+function getEnabledScoringParticipants(
+  users: Array<{ id: string; name: string; role: Role }>,
+  statuses: CompetitionScorerStatus[],
+  competitionId: string | null | undefined,
+) {
+  return getCompetitionScoringParticipants(users, statuses, competitionId).filter((participant) => participant.canScore);
+}
+
+function canUserScoreCompetition(statuses: CompetitionScorerStatus[], userId: string, competitionId: string | null | undefined) {
+  if (!competitionId) {
+    return true;
+  }
+
+  return statuses.find((entry) => entry.userId === userId && entry.competitionId === competitionId)?.canScore ?? true;
+}
 
 export async function getSessionUser() {
   const session = await auth();
@@ -112,18 +152,30 @@ function getSubmittedScores(team: TeamWithRelations) {
 function getAllVisibleJudgeIds(
   settings: { judgeScope: "ALL" | "ASSIGNED" } | null,
   team: TeamWithRelations,
-  allJudgeIds: string[],
+  scoringParticipants: ScoringParticipant[],
 ) {
-  return settings?.judgeScope === "ASSIGNED" ? team.assignments.map((assignment) => assignment.judgeId) : allJudgeIds;
+  if (settings?.judgeScope !== "ASSIGNED") {
+    return scoringParticipants.map((participant) => participant.id);
+  }
+
+  const chiefJudgeIds = scoringParticipants
+    .filter((participant) => participant.role === Role.ADMIN)
+    .map((participant) => participant.id);
+  const enabledParticipantIds = new Set(scoringParticipants.map((participant) => participant.id));
+  const assignedJudgeIds = team.assignments
+    .map((assignment) => assignment.judgeId)
+    .filter((judgeId) => enabledParticipantIds.has(judgeId));
+
+  return Array.from(new Set([...chiefJudgeIds, ...assignedJudgeIds]));
 }
 
 function computeTeamMetrics(
   team: TeamWithRelations,
   settings: { judgeScope: "ALL" | "ASSIGNED" } | null,
-  allJudgeIds: string[],
+  scoringParticipants: ScoringParticipant[],
 ) {
-  const submitted = getSubmittedScores(team);
-  const expectedJudgeIds = getAllVisibleJudgeIds(settings, team, allJudgeIds);
+  const expectedJudgeIds = getAllVisibleJudgeIds(settings, team, scoringParticipants);
+  const submitted = getSubmittedScores(team).filter((score) => expectedJudgeIds.includes(score.judgeId));
 
   return {
     submitted,
@@ -141,17 +193,19 @@ function getApprovedTeams(teams: TeamWithRelations[]) {
   return teams.filter((team) => team.status === "ACTIVE" && team.submissionStatus === ApprovalStatus.APPROVED);
 }
 
-function getRankedRows(teams: TeamWithRelations[], settings: { judgeScope: "ALL" | "ASSIGNED" } | null, judgeNames: Array<{ id: string; name: string }>) {
-  const allJudgeIds = judgeNames.map((judge) => judge.id);
-
+function getRankedRows(
+  teams: TeamWithRelations[],
+  settings: { judgeScope: "ALL" | "ASSIGNED" } | null,
+  scoringParticipants: ScoringParticipant[],
+) {
   return teams
     .map((team) => {
-      const metrics = computeTeamMetrics(team, settings, allJudgeIds);
+      const metrics = computeTeamMetrics(team, settings, scoringParticipants);
       const submittedByJudgeId = new Map(metrics.submitted.map((score) => [score.judgeId, score]));
-      const pendingJudgeNames = judgeNames
-        .filter((judge) => metrics.expectedJudgeIds.includes(judge.id))
-        .filter((judge) => !metrics.submitted.some((score) => score.judgeId === judge.id))
-        .map((judge) => judge.name);
+      const pendingJudgeNames = scoringParticipants
+        .filter((participant) => metrics.expectedJudgeIds.includes(participant.id))
+        .filter((participant) => !metrics.submitted.some((score) => score.judgeId === participant.id))
+        .map((participant) => participant.name);
 
       return {
         id: team.id,
@@ -166,13 +220,13 @@ function getRankedRows(teams: TeamWithRelations[], settings: { judgeScope: "ALL"
         expectedCount: metrics.expectedJudgeIds.length,
         completionRate: metrics.expectedJudgeIds.length ? round((metrics.submitted.length / metrics.expectedJudgeIds.length) * 100, 0) : 0,
         pendingJudgeNames,
-        perJudgeScores: judgeNames
-          .filter((judge) => metrics.expectedJudgeIds.includes(judge.id))
-          .map((judge) => {
-            const judgeScore = submittedByJudgeId.get(judge.id);
+        perJudgeScores: scoringParticipants
+          .filter((participant) => metrics.expectedJudgeIds.includes(participant.id))
+          .map((participant) => {
+            const judgeScore = submittedByJudgeId.get(participant.id);
 
             return {
-              judgeName: judge.name,
+              judgeName: participant.name,
               score: judgeScore?.weightedScore ?? null,
               status: judgeScore?.status ?? "PENDING",
               scoreComment: judgeScore?.comment ?? "",
@@ -213,7 +267,7 @@ export async function getAdminDashboardData() {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
   const activeCompetitionId = getActiveCompetitionId(settings);
 
-  const [teams, judges, recentAudits] = await Promise.all([
+  const [teams, judges, scoringStatuses, recentAudits] = await Promise.all([
     prisma.team.findMany({
       where: activeCompetitionId
         ? {
@@ -227,7 +281,7 @@ export async function getAdminDashboardData() {
       orderBy: { teamCode: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: "JUDGE", active: true },
+      where: scoringParticipantWhere,
       include: {
         assignments: activeCompetitionId
           ? {
@@ -255,8 +309,14 @@ export async function getAdminDashboardData() {
               orderBy: { updatedAt: "desc" },
             },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
+    activeCompetitionId
+      ? prisma.competitionScorer.findMany({
+          where: { competitionId: activeCompetitionId },
+          select: { competitionId: true, userId: true, canScore: true },
+        })
+      : Promise.resolve([]),
     prisma.scoreAudit.findMany({
       where: activeCompetitionId
         ? {
@@ -287,21 +347,25 @@ export async function getAdminDashboardData() {
   ]);
 
   const approvedTeams = getApprovedTeams(teams);
-  const judgeNames = judges.map((judge) => ({ id: judge.id, name: judge.name }));
-  const rankedRows = getRankedRows(approvedTeams, settings, judgeNames);
-  const allJudgeIds = judgeNames.map((judge) => judge.id);
+  const scoringParticipants = getEnabledScoringParticipants(judges, scoringStatuses, activeCompetitionId);
+  const rankedRows = getRankedRows(approvedTeams, settings, scoringParticipants);
   const pendingApprovalTeams = teams.filter((team) => team.submissionStatus === ApprovalStatus.PENDING).length;
   const approvedCount = approvedTeams.length;
 
   const submittedScores = approvedTeams.reduce((sum, team) => sum + getSubmittedScores(team).length, 0);
   const expectedScores = approvedTeams.reduce((sum, team) => {
-    return sum + getAllVisibleJudgeIds(settings, team, allJudgeIds).length;
+    return sum + getAllVisibleJudgeIds(settings, team, scoringParticipants).length;
   }, 0);
 
   const judgeProgress = judges.map((judge) => {
+    const judgeCanScore = canUserScoreCompetition(scoringStatuses, judge.id, activeCompetitionId);
     const visibleApprovedTeams =
-      settings?.judgeScope === "ASSIGNED"
-        ? approvedTeams.filter((team) => team.assignments.some((assignment) => assignment.judgeId === judge.id))
+      !judgeCanScore
+        ? []
+        : settings?.judgeScope === "ASSIGNED"
+        ? judge.role === Role.ADMIN
+          ? approvedTeams
+          : approvedTeams.filter((team) => team.assignments.some((assignment) => assignment.judgeId === judge.id))
         : approvedTeams;
     const submittedCount = judge.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
     const draftCount = judge.scores.filter((score) => score.status === ScoreStatus.DRAFT).length;
@@ -353,15 +417,23 @@ export async function getAdminDashboardData() {
 export async function getTeamsManagementData() {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
 
-  const [teams, judges, teamAccounts, competitions, categories] = await Promise.all([
+  const [teams, judges, scoringParticipants, scoringStatuses, teamAccounts, competitions, categories] = await Promise.all([
     prisma.team.findMany({
       include: teamInclude,
       orderBy: [{ teamCode: "asc" }],
     }),
     prisma.user.findMany({
-      where: { role: "JUDGE", active: true },
+      where: { role: Role.JUDGE, active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: scoringParticipantWhere,
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    prisma.competitionScorer.findMany({
+      select: { competitionId: true, userId: true, canScore: true },
     }),
     prisma.user.findMany({
       where: { role: "TEAM", active: true },
@@ -389,11 +461,13 @@ export async function getTeamsManagementData() {
     }),
   ]);
 
-  const allJudgeIds = judges.map((judge) => judge.id);
-
   return {
     teams: teams.map((team) => {
-      const metrics = computeTeamMetrics(team, settings, allJudgeIds);
+      const metrics = computeTeamMetrics(
+        team,
+        settings,
+        getEnabledScoringParticipants(scoringParticipants, scoringStatuses, team.category?.competitionId),
+      );
 
       return {
         id: team.id,
@@ -467,9 +541,9 @@ export async function getCommentsReviewData(filters: {
       orderBy: { teamName: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: "JUDGE", active: true },
+      where: scoringParticipantWhere,
       select: { id: true, name: true },
-      orderBy: { name: "asc" },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
     prisma.category.findMany({
       where: activeCompetitionId ? { competitionId: activeCompetitionId } : undefined,
@@ -518,7 +592,7 @@ export async function getLeaderboardData(competitionId?: string) {
   const { settings, competitions, selectedCompetitionId } = await resolveCompetitionScope(competitionId);
   const selectedCompetition = competitions.find((competition) => competition.id === selectedCompetitionId) ?? null;
 
-  const [teams, judges, categories] = await Promise.all([
+  const [teams, judges, scoringStatuses, categories] = await Promise.all([
     prisma.team.findMany({
       where: selectedCompetitionId
         ? {
@@ -531,10 +605,16 @@ export async function getLeaderboardData(competitionId?: string) {
       orderBy: { teamCode: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: "JUDGE", active: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
+      where: scoringParticipantWhere,
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
+    selectedCompetitionId
+      ? prisma.competitionScorer.findMany({
+          where: { competitionId: selectedCompetitionId },
+          select: { competitionId: true, userId: true, canScore: true },
+        })
+      : Promise.resolve([]),
     prisma.category.findMany({
       where: selectedCompetitionId ? { competitionId: selectedCompetitionId } : undefined,
       orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
@@ -542,8 +622,9 @@ export async function getLeaderboardData(competitionId?: string) {
   ]);
 
   const approvedTeams = getApprovedTeams(teams);
-  const judgeNames = judges.map((judge) => ({ id: judge.id, name: judge.name }));
-  const overallRows = getRankedRows(approvedTeams, settings, judgeNames).map((row, index) => ({
+  const scoringParticipants = getCompetitionScoringParticipants(judges, scoringStatuses, selectedCompetitionId);
+  const enabledScoringParticipants = scoringParticipants.filter((participant) => participant.canScore);
+  const overallRows = getRankedRows(approvedTeams, settings, enabledScoringParticipants).map((row, index) => ({
     ...row,
     rank: index + 1,
   }));
@@ -552,7 +633,7 @@ export async function getLeaderboardData(competitionId?: string) {
     const rows = getRankedRows(
       approvedTeams.filter((team) => team.categoryId === category.id),
       settings,
-      judgeNames,
+      enabledScoringParticipants,
     ).map((row, index) => ({
       ...row,
       rank: index + 1,
@@ -575,6 +656,7 @@ export async function getLeaderboardData(competitionId?: string) {
     overallRows,
     categorySections,
     judges,
+    scoringParticipants,
   };
 }
 
@@ -699,7 +781,7 @@ export async function getSettingsPageData(competitionId?: string) {
 export async function getJudgeDashboardData(userId: string) {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
 
-  const [judge, teams] = await Promise.all([
+  const [judge, teams, scoringStatuses] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -746,13 +828,24 @@ export async function getJudgeDashboardData(userId: string) {
       },
       orderBy: [{ category: { displayOrder: "asc" } }, { teamCode: "asc" }],
     }),
+    prisma.competitionScorer.findMany({
+      where: { userId },
+      select: { competitionId: true, userId: true, canScore: true },
+    }),
   ]);
 
   if (!judge) {
     return null;
   }
 
-  const visibleTeams = settings?.judgeScope === "ASSIGNED" ? teams.filter((team) => team.assignments.length > 0) : teams;
+  const isChiefJudge = judge.role === Role.ADMIN;
+  const scorableTeams = teams.filter((team) =>
+    canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId),
+  );
+  const visibleTeams =
+    !isChiefJudge && settings?.judgeScope === "ASSIGNED"
+      ? scorableTeams.filter((team) => team.assignments.length > 0)
+      : scorableTeams;
   const submittedCount = judge.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
   const draftCount = judge.scores.filter((score) => score.status === ScoreStatus.DRAFT).length;
   const completionRate = visibleTeams.length ? round((submittedCount / visibleTeams.length) * 100, 0) : 0;
@@ -825,10 +918,10 @@ export async function getJudgeTeamsData(userId: string) {
   return getJudgeDashboardData(userId);
 }
 
-export async function getJudgeScoringPageData(userId: string, teamId: string) {
+export async function getJudgeScoringPageData(userId: string, teamId: string, role?: Role) {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
 
-  const [allTeams, team, existingScore] = await Promise.all([
+  const [allTeams, team, existingScore, scoringStatuses] = await Promise.all([
     prisma.team.findMany({
       where: {
         status: "ACTIVE",
@@ -838,6 +931,11 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
         id: true,
         teamCode: true,
         teamName: true,
+        category: {
+          select: {
+            competitionId: true,
+          },
+        },
         assignments: {
           where: { judgeId: userId },
           select: { id: true },
@@ -886,9 +984,17 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
         },
       },
     }),
+    prisma.competitionScorer.findMany({
+      where: { userId },
+      select: { competitionId: true, userId: true, canScore: true },
+    }),
   ]);
 
   if (!team || team.submissionStatus !== ApprovalStatus.APPROVED || !team.categoryId) {
+    return null;
+  }
+
+  if (!canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId)) {
     return null;
   }
 
@@ -906,12 +1012,22 @@ export async function getJudgeScoringPageData(userId: string, teamId: string) {
     orderBy: { displayOrder: "asc" },
   });
 
-  const isVisible = settings?.judgeScope === "ALL" || allTeams.some((entry) => entry.id === teamId && entry.assignments.length > 0);
+  const isChiefJudge = role === Role.ADMIN;
+  const scorableAllTeams = allTeams.filter((entry) =>
+    canUserScoreCompetition(scoringStatuses, userId, entry.category?.competitionId),
+  );
+  const isVisible =
+    isChiefJudge ||
+    settings?.judgeScope === "ALL" ||
+    scorableAllTeams.some((entry) => entry.id === teamId && entry.assignments.length > 0);
   if (!isVisible) {
     return null;
   }
 
-  const visibleTeams = settings?.judgeScope === "ALL" ? allTeams : allTeams.filter((entry) => entry.assignments.length > 0);
+  const visibleTeams =
+    isChiefJudge || settings?.judgeScope === "ALL"
+      ? scorableAllTeams
+      : scorableAllTeams.filter((entry) => entry.assignments.length > 0);
   const currentIndex = visibleTeams.findIndex((entry) => entry.id === teamId);
   const submittedCount = visibleTeams.filter((entry) =>
     entry.scores.some((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED),

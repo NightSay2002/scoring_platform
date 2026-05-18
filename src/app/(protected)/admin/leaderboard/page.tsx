@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { JudgeScoreCards } from "@/components/admin/judge-score-cards";
+import { ScoringParticipantsButton } from "@/components/admin/scoring-participants-button";
 import { ScoringToggleButton } from "@/components/admin/scoring-toggle-button";
 import { Badge } from "@/components/shared/badge";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
@@ -58,6 +59,21 @@ export default async function AdminLeaderboardPage({
               ))}
             </select>
             <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white sm:w-auto">{t.applyCompetition}</button>
+            <ScoringParticipantsButton
+              competitionId={data.selectedCompetitionId}
+              participants={data.scoringParticipants}
+              labels={{
+                manageScorers: t.manageScorers,
+                scoringParticipantsTitle: t.scoringParticipantsTitle,
+                scoringParticipantsDesc: t.scoringParticipantsDesc,
+                canScore: t.canScore,
+                cannotScore: t.cannotScore,
+                adminRole: messages.header.role.ADMIN,
+                judgeRole: messages.header.role.JUDGE,
+                scorerUpdated: t.scorerUpdated,
+                close: t.close,
+              }}
+            />
             <ScoringToggleButton
               isClosed={data.scoringAvailability.scoringClosed}
               competitionId={data.selectedCompetitionId}

@@ -602,6 +602,62 @@ export async function toggleCompetitionScoringAction(resume: boolean, competitio
   return { success: true };
 }
 
+export async function setCompetitionScorerStatusAction(payload: {
+  competitionId: string;
+  userId: string;
+  canScore: boolean;
+}) {
+  await requireAdmin();
+
+  const competitionId = payload.competitionId?.trim();
+  const userId = payload.userId?.trim();
+
+  if (!competitionId || !userId || typeof payload.canScore !== "boolean") {
+    return { error: "Invalid scoring participant payload." };
+  }
+
+  const [competition, user] = await Promise.all([
+    prisma.competition.findUnique({
+      where: { id: competitionId },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, active: true },
+    }),
+  ]);
+
+  if (!competition) {
+    return { error: "Competition not found." };
+  }
+
+  if (!user || !user.active || (user.role !== Role.ADMIN && user.role !== Role.JUDGE)) {
+    return { error: "Selected account cannot be a scoring participant." };
+  }
+
+  await withSqliteWriteRetry(() =>
+    prisma.competitionScorer.upsert({
+      where: {
+        competitionId_userId: {
+          competitionId,
+          userId,
+        },
+      },
+      create: {
+        competitionId,
+        userId,
+        canScore: payload.canScore,
+      },
+      update: {
+        canScore: payload.canScore,
+      },
+    }),
+  );
+
+  revalidateAppData();
+  return { success: true };
+}
+
 export async function createCompetitionAction(payload: {
   name: string;
   description?: string;

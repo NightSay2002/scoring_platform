@@ -26,7 +26,7 @@ export default async function JudgeScoringPage({
   const common = messages.common;
 
   const { teamId } = await params;
-  const data = await getJudgeScoringPageData(session.user.id, teamId);
+  const data = await getJudgeScoringPageData(session.user.id, teamId, session.user.role);
 
   if (!data) {
     notFound();

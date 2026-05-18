@@ -50,10 +50,10 @@ function getScoringClosedMessage(
   return null;
 }
 
-async function requireJudge() {
+async function requireScorer() {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== Role.JUDGE) {
+  if (!session?.user || (session.user.role !== Role.JUDGE && session.user.role !== Role.ADMIN)) {
     throw new Error("Unauthorized");
   }
 
@@ -61,7 +61,7 @@ async function requireJudge() {
 }
 
 async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: ScoreStatus) {
-  const judge = await requireJudge();
+  const scorer = await requireScorer();
   const parsed = scorePayloadSchema.safeParse(payload);
 
   if (!parsed.success) {
@@ -79,7 +79,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
           },
         },
         assignments: {
-          where: { judgeId: judge.id },
+          where: { judgeId: scorer.id },
         },
       },
     }),
@@ -89,7 +89,24 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     return { error: "Team not found." };
   }
 
-  if (settings?.judgeScope === "ASSIGNED" && team.assignments.length === 0) {
+  const competitionId = team.category?.competitionId;
+  if (competitionId) {
+    const scorerStatus = await prisma.competitionScorer.findUnique({
+      where: {
+        competitionId_userId: {
+          competitionId,
+          userId: scorer.id,
+        },
+      },
+      select: { canScore: true },
+    });
+
+    if (scorerStatus?.canScore === false) {
+      return { error: "You are not allowed to score this competition." };
+    }
+  }
+
+  if (scorer.role !== Role.ADMIN && settings?.judgeScope === "ASSIGNED" && team.assignments.length === 0) {
     return { error: "You are not assigned to this team." };
   }
 
@@ -212,7 +229,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     where: {
       teamId_judgeId: {
         teamId: parsed.data.teamId,
-        judgeId: judge.id,
+        judgeId: scorer.id,
       },
     },
   });
@@ -232,7 +249,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
 
   const saveData: Prisma.ScoreUncheckedCreateInput = {
     teamId: parsed.data.teamId,
-    judgeId: judge.id,
+    judgeId: scorer.id,
     comment: parsed.data.comment.trim(),
     totalScore,
     weightedScore,
@@ -260,7 +277,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
             },
             audits: {
               create: {
-                actorId: judge.id,
+                actorId: scorer.id,
                 action: status === ScoreStatus.SUBMITTED ? "submit" : "save_draft",
                 snapshot: JSON.stringify({
                   comment: parsed.data.comment.trim(),
@@ -286,7 +303,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
             },
             audits: {
               create: {
-                actorId: judge.id,
+                actorId: scorer.id,
                 action: status === ScoreStatus.SUBMITTED ? "submit" : "save_draft",
                 snapshot: JSON.stringify({
                   comment: parsed.data.comment.trim(),

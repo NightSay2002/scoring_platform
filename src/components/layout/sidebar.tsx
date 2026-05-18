@@ -24,6 +24,7 @@ type NavItem = {
 const adminItems: NavItem[] = [
   { href: "/admin", labelKey: "dashboard", icon: BarChart3 },
   { href: "/admin/teams", labelKey: "teams", icon: Users },
+  { href: "/judge/teams", labelKey: "approvedWorks", icon: ListChecks },
   { href: "/admin/comments", labelKey: "comments", icon: ClipboardList },
   { href: "/admin/leaderboard", labelKey: "leaderboard", icon: Trophy },
   { href: "/admin/settings", labelKey: "settings", icon: Settings },

@@ -28,7 +28,7 @@ export default auth((req: {
     return NextResponse.redirect(new URL(role === "TEAM" ? "/team" : "/judge", req.url));
   }
 
-  if (pathname.startsWith("/judge") && role !== "JUDGE") {
+  if (pathname.startsWith("/judge") && role !== "JUDGE" && role !== "ADMIN") {
     return NextResponse.redirect(new URL(role === "TEAM" ? "/team" : "/admin", req.url));
   }
 

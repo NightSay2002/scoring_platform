@@ -18,13 +18,13 @@ export default async function JudgeLayout({
     redirect("/login");
   }
 
-  if (session.user.role !== "JUDGE") {
+  if (session.user.role !== "JUDGE" && session.user.role !== "ADMIN") {
     redirect(session.user.role === "TEAM" ? "/team" : "/admin");
   }
 
   return (
     <AppShell
-      role="JUDGE"
+      role={session.user.role}
       userName={session.user.name ?? session.user.email ?? "Judge"}
       competitionName={settings?.competitionName ?? "Competition"}
     >

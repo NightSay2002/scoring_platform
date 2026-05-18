@@ -32,6 +32,17 @@ CREATE TABLE "CompetitionImage" (
     CONSTRAINT "CompetitionImage_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "Competition" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE "CompetitionScorer" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "competitionId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "canScore" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "CompetitionScorer_competitionId_fkey" FOREIGN KEY ("competitionId") REFERENCES "Competition" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CompetitionScorer_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE "Category" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "competitionId" TEXT NOT NULL,
@@ -181,6 +192,7 @@ CREATE TABLE "ScoreAudit" (
 
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "Competition_name_key" ON "Competition"("name");
+CREATE UNIQUE INDEX "CompetitionScorer_competitionId_userId_key" ON "CompetitionScorer"("competitionId", "userId");
 CREATE UNIQUE INDEX "Category_competitionId_name_key" ON "Category"("competitionId", "name");
 CREATE UNIQUE INDEX "Team_teamCode_key" ON "Team"("teamCode");
 CREATE UNIQUE INDEX "Team_ownerUserId_key" ON "Team"("ownerUserId");

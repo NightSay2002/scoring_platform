@@ -51,6 +51,7 @@ model User {
   auditEvents  ScoreAudit[]
   ownedTeam    Team?            @relation("TeamOwner")
   approvedTeams Team[]          @relation("TeamApprover")
+  competitionScorers CompetitionScorer[]
 }
 
 model Team {
@@ -95,6 +96,20 @@ model Competition {
   categories  Category[]
   settings    Settings[]
   images      CompetitionImage[]
+  scorers      CompetitionScorer[]
+}
+
+model CompetitionScorer {
+  id            String      @id @default(cuid())
+  competitionId String
+  userId        String
+  canScore      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  competition   Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
 }
 
 model CompetitionImage {
