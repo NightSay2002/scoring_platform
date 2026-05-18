@@ -315,15 +315,17 @@ export function ScoringForm({
                   <div className="mt-1 font-medium text-slate-950">{criterion.name}</div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.rangeWeightLabel}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{criterion.subCriteria.length ? t.weight : t.rangeWeightLabel}</p>
                   <div className="mt-1 text-sm" style={getWeightStyle(criterion.weight, criterionWeights)}>
-                    {criterion.minScore} - {criterion.maxScore} | {criterion.weight}%
+                    {criterion.subCriteria.length ? `${criterion.weight}%` : `${criterion.minScore} - ${criterion.maxScore} | ${criterion.weight}%`}
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
-                  <div className="mt-1 text-sm leading-6 text-slate-500">{criterion.description || common.labels.notProvided}</div>
-                </div>
+                {criterion.description ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
+                    <div className="mt-1 text-sm leading-6 text-slate-500">{criterion.description}</div>
+                  </div>
+                ) : null}
               </div>
               {criterion.subCriteria.length ? (
                 <>
@@ -353,10 +355,12 @@ export function ScoringForm({
                               {subCriterion.minScore} - {subCriterion.maxScore} | {subCriterion.weight}%
                             </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
-                            <div className="mt-1 text-xs leading-5 text-slate-500">{subCriterion.description || common.labels.notProvided}</div>
-                          </div>
+                          {subCriterion.description ? (
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t.contentLabel}</p>
+                              <div className="mt-1 text-xs leading-5 text-slate-500">{subCriterion.description}</div>
+                            </div>
+                          ) : null}
                         </div>
                         <input
                           type="text"
