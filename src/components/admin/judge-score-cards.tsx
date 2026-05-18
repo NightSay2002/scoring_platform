@@ -6,6 +6,7 @@ import { Button } from "@/components/shared/button";
 import { HorizontalDragScroll } from "@/components/shared/horizontal-drag-scroll";
 
 type JudgeScore = {
+  judgeId?: string;
   judgeName: string;
   score: number | null;
   status: string;

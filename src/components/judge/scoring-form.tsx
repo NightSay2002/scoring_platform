@@ -332,9 +332,6 @@ export function ScoringForm({
                   <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">
                     {getCriterionNumericScore(criterion).toFixed(2)}
                   </div>
-                  <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">
-                    {t.weightedPrefix} {round(getCriterionNumericScore(criterion) * (criterion.weight / 100)).toFixed(2)}
-                  </div>
                   <div className="space-y-3 md:col-span-3">
                     {criterion.subCriteria.map((subCriterion) => (
                       <div key={subCriterion.id} className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-[1fr_100px_120px] md:items-start">

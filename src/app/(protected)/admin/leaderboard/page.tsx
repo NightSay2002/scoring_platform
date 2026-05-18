@@ -19,8 +19,30 @@ export default async function AdminLeaderboardPage({
   const { messages } = await getRequestI18n();
   const params = await searchParams;
   const competitionId = typeof params.competitionId === "string" ? params.competitionId : undefined;
-  const data = await getLeaderboardData(competitionId);
+  const judgeId = typeof params.judgeId === "string" ? params.judgeId : undefined;
+  const data = await getLeaderboardData(competitionId, judgeId);
   const t = messages.adminLeaderboard;
+  const scoreCardLabels = {
+    pending: t.pending,
+    clickForDetails: t.clickForDetails,
+    detailsTitle: t.detailsTitle,
+    judge: t.judge,
+    status: t.status,
+    score: t.score,
+    updated: t.updated,
+    overallComment: t.overallComment,
+    criterionBreakdown: t.criterionBreakdown,
+    criterionComment: t.criterionComment,
+    noComment: messages.common.labels.noComment,
+    noData: messages.common.labels.noData,
+    close: t.close,
+    statuses: {
+      draft: messages.common.statuses.draft,
+      submitted: messages.common.statuses.submitted,
+      edited: messages.common.statuses.edited,
+      pending: messages.common.statuses.pending,
+    },
+  };
 
   return (
     <div className="space-y-6">
@@ -149,27 +171,7 @@ export default async function AdminLeaderboardPage({
                       <JudgeScoreCards
                         judges={row.perJudgeScores}
                         ariaLabel={t.perJudgeScores}
-                        labels={{
-                          pending: t.pending,
-                          clickForDetails: t.clickForDetails,
-                          detailsTitle: t.detailsTitle,
-                          judge: t.judge,
-                          status: t.status,
-                          score: t.score,
-                          updated: t.updated,
-                          overallComment: t.overallComment,
-                          criterionBreakdown: t.criterionBreakdown,
-                          criterionComment: t.criterionComment,
-                          noComment: messages.common.labels.noComment,
-                          noData: messages.common.labels.noData,
-                          close: t.close,
-                          statuses: {
-                            draft: messages.common.statuses.draft,
-                            submitted: messages.common.statuses.submitted,
-                            edited: messages.common.statuses.edited,
-                            pending: messages.common.statuses.pending,
-                          },
-                        }}
+                        labels={scoreCardLabels}
                       />
                     </TD>
                   </tr>
@@ -177,6 +179,68 @@ export default async function AdminLeaderboardPage({
               </TBody>
             </DataTable>
           </Table>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader title={t.judgeRankingTitle} description={t.judgeRankingDesc} />
+        <CardContent className="space-y-4">
+          <form className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            {data.selectedCompetitionId ? <input type="hidden" name="competitionId" value={data.selectedCompetitionId} /> : null}
+            <div className="space-y-2">
+              <label htmlFor="judgeId" className="text-sm font-medium text-slate-700">
+                {t.judgeRankingJudgeLabel}
+              </label>
+              <select
+                id="judgeId"
+                name="judgeId"
+                defaultValue={data.selectedJudgeRankingId}
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 sm:min-w-[260px] sm:w-auto"
+              >
+                {data.judgeRankingOptions.map((judge) => (
+                  <option key={judge.id} value={judge.id}>
+                    {judge.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white sm:w-auto">{t.applyJudge}</button>
+          </form>
+          <Table>
+            <DataTable>
+              <THead>
+                <tr>
+                  <TH>{t.rank}</TH>
+                  <TH>{t.team}</TH>
+                  <TH>{t.average}</TH>
+                  <TH>{t.scoreDetails}</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {data.judgeRankingRows.map((row) => (
+                  <tr key={`${data.selectedJudgeRankingId}-${row.id}`}>
+                    <TD className="font-semibold text-slate-950">#{row.rank}</TD>
+                    <TD>
+                      <div className="font-medium text-slate-950">
+                        {row.teamName} <span className="text-slate-400">({row.teamCode})</span>
+                      </div>
+                      <div className="text-xs text-slate-500">{row.projectTitle}</div>
+                    </TD>
+                    <TD>{row.averageScore.toFixed(2)}</TD>
+                    <TD>
+                      <JudgeScoreCards
+                        judges={row.perJudgeScores}
+                        ariaLabel={t.scoreDetails}
+                        labels={scoreCardLabels}
+                      />
+                    </TD>
+                  </tr>
+                ))}
+              </TBody>
+            </DataTable>
+          </Table>
+          {!data.judgeRankingRows.length ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{messages.common.labels.noData}</div>
+          ) : null}
         </CardContent>
       </Card>
       {data.categorySections.map((section) => (

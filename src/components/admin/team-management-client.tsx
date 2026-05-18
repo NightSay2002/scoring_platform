@@ -636,7 +636,7 @@ export function TeamManagementClient({
                 {form.documentLinks.length ? (
                   <div className="space-y-2">
                     {form.documentLinks.map((link, index) => (
-                      <div key={`${index}-${link.url}`} className="grid gap-2 md:grid-cols-[0.8fr_1.2fr_auto]">
+                      <div key={`document-link-${index}`} className="grid gap-2 md:grid-cols-[0.8fr_1.2fr_auto]">
                         <Input
                           value={link.name}
                           placeholder={t.documentNamePlaceholder}

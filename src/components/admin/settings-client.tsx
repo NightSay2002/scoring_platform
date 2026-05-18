@@ -854,17 +854,6 @@ export function SettingsClient({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.judgeVisibility}</label>
-              <select
-                value={settingsForm.judgeScope}
-                onChange={(event) => setSettingsForm((current) => ({ ...current, judgeScope: event.target.value as "ALL" | "ASSIGNED" }))}
-                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
-              >
-                <option value="ALL">{t.judgeVisibilityAll}</option>
-                <option value="ASSIGNED">{t.judgeVisibilityAssigned}</option>
-              </select>
-            </div>
-            <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.submissionDeadline}</label>
               <Input
                 type="datetime-local"
@@ -1237,7 +1226,7 @@ export function SettingsClient({
                     <TD>
                       <div className="text-sm text-slate-600">
                         {account.role === "JUDGE"
-                          ? `${account.assignmentCount} / ${account.submittedCount} ${t.assignmentsSubmissions}`
+                          ? t.judgeAccount
                           : account.role === "TEAM"
                             ? t.teamSubmissionOwner
                             : t.adminAccount}

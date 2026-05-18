@@ -42,10 +42,20 @@ type TeamWithRelations = Prisma.TeamGetPayload<{ include: typeof teamInclude }>;
 type ScoringParticipant = { id: string; name: string; role: Role; canScore: boolean };
 type CompetitionScorerStatus = { competitionId: string; userId: string; canScore: boolean };
 
+const teamCodeCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+
 const scoringParticipantWhere = {
   role: { in: [Role.ADMIN, Role.JUDGE] },
   active: true,
 } satisfies Prisma.UserWhereInput;
+
+function compareTeamCodeValue(left: string, right: string) {
+  return teamCodeCollator.compare(left, right);
+}
+
+function compareTeamCode<T extends { teamCode: string }>(left: T, right: T) {
+  return compareTeamCodeValue(left.teamCode, right.teamCode);
+}
 
 function getCompetitionScoringParticipants(
   users: Array<{ id: string; name: string; role: Role }>,
@@ -226,6 +236,7 @@ function getRankedRows(
             const judgeScore = submittedByJudgeId.get(participant.id);
 
             return {
+              judgeId: participant.id,
               judgeName: participant.name,
               score: judgeScore?.weightedScore ?? null,
               status: judgeScore?.status ?? "PENDING",
@@ -259,7 +270,7 @@ function getRankedRows(
         return b.averageScore - a.averageScore;
       }
 
-      return a.teamCode.localeCompare(b.teamCode);
+      return compareTeamCodeValue(a.teamCode, b.teamCode);
     });
 }
 
@@ -349,7 +360,9 @@ export async function getAdminDashboardData() {
   const approvedTeams = getApprovedTeams(teams);
   const scoringParticipants = getEnabledScoringParticipants(judges, scoringStatuses, activeCompetitionId);
   const rankedRows = getRankedRows(approvedTeams, settings, scoringParticipants);
-  const pendingApprovalTeams = teams.filter((team) => team.submissionStatus === ApprovalStatus.PENDING).length;
+  const pendingApprovalTeams = teams.filter((team) =>
+    team.submissionStatus === ApprovalStatus.DRAFT || team.submissionStatus === ApprovalStatus.PENDING,
+  ).length;
   const approvedCount = approvedTeams.length;
 
   const submittedScores = approvedTeams.reduce((sum, team) => sum + getSubmittedScores(team).length, 0);
@@ -420,7 +433,9 @@ export async function getAdminDashboardData() {
       category: audit.score.team.category?.name ?? "Uncategorized",
       createdAt: audit.createdAt,
     })),
-    judgeProgress,
+    judgeProgress: judgeProgress.filter(
+      (judge) => judge.assignedTeams || judge.draftCount || judge.submittedCount || judge.pendingCount,
+    ),
     categorySummary: Array.from(categoryLeaders.values()),
   };
 }
@@ -473,7 +488,7 @@ export async function getTeamsManagementData() {
   ]);
 
   return {
-    teams: teams.map((team) => {
+    teams: teams.slice().sort(compareTeamCode).map((team) => {
       const metrics = computeTeamMetrics(
         team,
         settings,
@@ -599,7 +614,7 @@ export async function getCommentsReviewData(filters: {
   };
 }
 
-export async function getLeaderboardData(competitionId?: string) {
+export async function getLeaderboardData(competitionId?: string, judgeId?: string) {
   const { settings, competitions, selectedCompetitionId } = await resolveCompetitionScope(competitionId);
   const selectedCompetition = competitions.find((competition) => competition.id === selectedCompetitionId) ?? null;
 
@@ -639,6 +654,43 @@ export async function getLeaderboardData(competitionId?: string) {
     ...row,
     rank: index + 1,
   }));
+  const judgeRankingOptions = enabledScoringParticipants.map((participant) => ({
+    id: participant.id,
+    name: participant.name,
+    role: participant.role,
+  }));
+  const selectedJudgeRankingId =
+    judgeId && judgeRankingOptions.some((participant) => participant.id === judgeId)
+      ? judgeId
+      : judgeRankingOptions[0]?.id ?? "";
+  const judgeRankingRows = selectedJudgeRankingId
+    ? overallRows
+        .map((row) => {
+          const selectedJudgeScore = row.perJudgeScores.find((score) => score.judgeId === selectedJudgeRankingId);
+
+          if (!selectedJudgeScore) {
+            return null;
+          }
+
+          return {
+            ...row,
+            averageScore: selectedJudgeScore.score ?? 0,
+            perJudgeScores: [selectedJudgeScore],
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+        .sort((a, b) => {
+          if (b.averageScore !== a.averageScore) {
+            return b.averageScore - a.averageScore;
+          }
+
+          return compareTeamCodeValue(a.teamCode, b.teamCode);
+        })
+        .map((row, index) => ({
+          ...row,
+          rank: index + 1,
+        }))
+    : [];
 
   const categorySections = categories.map((category) => {
     const rows = getRankedRows(
@@ -666,6 +718,9 @@ export async function getLeaderboardData(competitionId?: string) {
     selectedCompetitionId: selectedCompetitionId ?? "",
     selectedCompetitionUpdatedAt: selectedCompetition?.updatedAt.toISOString() ?? "",
     overallRows,
+    judgeRankingOptions,
+    selectedJudgeRankingId,
+    judgeRankingRows,
     categorySections,
     judges,
     scoringParticipants,
