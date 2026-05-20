@@ -1,10 +1,17 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { getTeamsManagementData } from "@/lib/data";
 import { getRequestI18n } from "@/lib/i18n-server";
 import { TeamManagementClient } from "@/components/admin/team-management-client";
 
 export default async function AdminTeamsPage() {
-  const { messages } = await getRequestI18n();
+  const [session, { messages }] = await Promise.all([auth(), getRequestI18n()]);
+  if (session?.user.role === "CHIEF_JUDGE") {
+    redirect("/admin");
+  }
+
   const data = await getTeamsManagementData();
   const t = messages.adminTeams;
 

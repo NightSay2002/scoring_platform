@@ -7,12 +7,12 @@ import { csvEscape } from "@/lib/utils";
 export async function GET() {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "ADMIN") {
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "CHIEF_JUDGE")) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
   const { comments } = await getExportData();
-  const header = ["Category", "Team", "Project Title", "Judge", "Status", "Average Score", "Comment", "Updated At"];
+  const header = ["AWARD Category", "Team", "Project Title", "Judge", "Status", "Average Score", "Comment", "Updated At"];
   const rows = comments.map((score) =>
     [
       score.team.category?.name ?? "Uncategorized",

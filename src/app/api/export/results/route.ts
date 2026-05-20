@@ -7,7 +7,7 @@ import { csvEscape } from "@/lib/utils";
 export async function GET(request: Request) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "ADMIN") {
+  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "CHIEF_JUDGE")) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
@@ -16,8 +16,8 @@ export async function GET(request: Request) {
   const { leaderboard } = await getExportData(competitionId);
   const header = [
     "Rank",
-    "Category",
-    "Team Code",
+    "AWARD Category",
+    "Sequence",
     "Team Name",
     "Project Title",
     "Average Score",

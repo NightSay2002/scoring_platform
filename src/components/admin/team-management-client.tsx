@@ -2,18 +2,20 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileText, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, GripVertical, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
 
 import {
   approveTeamSubmissionAction,
   deleteTeamAction,
   rejectTeamSubmissionAction,
+  reorderTeamSequenceAction,
   upsertTeamAction,
 } from "@/actions/team";
 import { useI18n } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
+import { FeedbackMessage, RequiredMark } from "@/components/shared/form-feedback";
 import { Input } from "@/components/shared/input";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
@@ -123,6 +125,7 @@ export function TeamManagementClient({
   const [message, setMessage] = useState<string>("");
   const [avatarFileName, setAvatarFileName] = useState("");
   const [documentFileName, setDocumentFileName] = useState("");
+  const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
@@ -358,6 +361,31 @@ export function TeamManagementClient({
     });
   }
 
+  function reorderTeam(sourceId: string | null, target: TeamRow) {
+    if (!sourceId || sourceId === target.id) {
+      setDraggingTeamId(null);
+      return;
+    }
+
+    const source = teams.find((team) => team.id === sourceId);
+    if (!source) {
+      setDraggingTeamId(null);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await reorderTeamSequenceAction(source.id, target.id, source.updatedAt);
+      setDraggingTeamId(null);
+      if (result && "error" in result && result.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      setMessage(t.sequenceSaved);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -447,8 +475,21 @@ export function TeamManagementClient({
               </THead>
               <TBody>
                 {filteredTeams.map((team) => (
-                  <tr key={team.id}>
-                    <TD>{team.teamCode}</TD>
+                  <tr
+                    key={team.id}
+                    draggable={!pending}
+                    onDragStart={() => setDraggingTeamId(team.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => reorderTeam(draggingTeamId, team)}
+                    onDragEnd={() => setDraggingTeamId(null)}
+                    className={draggingTeamId === team.id ? "opacity-50" : ""}
+                  >
+                    <TD>
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="h-4 w-4 cursor-move text-slate-400" aria-label={t.dragToReorder} />
+                        <span>{team.teamCode}</span>
+                      </div>
+                    </TD>
                     <TD>
                       <div className="font-medium text-slate-950">{team.teamName}</div>
                       <div className="text-xs text-slate-500">{team.projectTitle}</div>
@@ -518,13 +559,13 @@ export function TeamManagementClient({
               <Input value={selectedTeam ? form.teamCode : t.autoTeamCode} disabled />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.teamName}</label>
+              <label className="text-sm font-medium text-slate-700">{t.teamName}<RequiredMark /></label>
               <Input value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} />
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.competition}</label>
+              <label className="text-sm font-medium text-slate-700">{t.competition}<RequiredMark /></label>
               <select
                 value={form.competitionId}
                 onChange={(event) => handleCompetitionChange(event.target.value)}
@@ -539,7 +580,7 @@ export function TeamManagementClient({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.category}</label>
+              <label className="text-sm font-medium text-slate-700">{t.category}<RequiredMark /></label>
               <select
                 value={form.categoryId}
                 onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
@@ -575,18 +616,18 @@ export function TeamManagementClient({
             <p className="text-xs text-slate-500">{t.ownerAccountHelp}</p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.projectTitle}</label>
+            <label className="text-sm font-medium text-slate-700">{t.projectTitle}<RequiredMark /></label>
             <Input value={form.projectTitle} onChange={(event) => setForm((current) => ({ ...current, projectTitle: event.target.value }))} />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.projectDescription}</label>
+            <label className="text-sm font-medium text-slate-700">{t.projectDescription}<RequiredMark /></label>
             <Textarea
               value={form.projectDescription}
               onChange={(event) => setForm((current) => ({ ...current, projectDescription: event.target.value }))}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.teamMembers}</label>
+            <label className="text-sm font-medium text-slate-700">{t.teamMembers}<RequiredMark /></label>
             <Textarea
               rows={5}
               value={form.teamMembers}
@@ -676,7 +717,7 @@ export function TeamManagementClient({
             <label className="text-sm font-medium text-slate-700">{t.reviewNote}</label>
             <Textarea value={form.reviewNote} onChange={(event) => setForm((current) => ({ ...current, reviewNote: event.target.value }))} />
           </div>
-          {message ? <p className="text-sm text-slate-600">{message}</p> : null}
+          <FeedbackMessage message={message} />
           <div className="flex flex-col-reverse items-stretch justify-end gap-3 sm:flex-row sm:items-center">
             <Button variant="outline" onClick={startCreate} className="w-full sm:w-auto">
               {t.reset}

@@ -19,7 +19,7 @@ export default async function TeamLayout({
   }
 
   if (session.user.role !== "TEAM") {
-    redirect(session.user.role === "ADMIN" ? "/admin" : "/judge");
+    redirect(session.user.role === "ADMIN" || session.user.role === "CHIEF_JUDGE" ? "/admin" : "/judge");
   }
 
   return (

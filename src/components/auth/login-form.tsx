@@ -9,6 +9,7 @@ import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { useI18n } from "@/components/i18n/language-provider";
 import { Button } from "@/components/shared/button";
 import { Input } from "@/components/shared/input";
+import { RequiredMark } from "@/components/shared/form-feedback";
 import { cn } from "@/lib/utils";
 
 export function LoginForm({
@@ -77,7 +78,7 @@ export function LoginForm({
       <input type="hidden" name="locale" value={locale} />
       <div className="space-y-2">
         <label className="text-sm font-medium text-[#d8d0c1]" htmlFor="identifier">
-          {messages.login.emailLabel}
+          {messages.login.emailLabel}<RequiredMark />
         </label>
         <Input
           ref={identifierRef}
@@ -95,7 +96,7 @@ export function LoginForm({
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium text-[#d8d0c1]" htmlFor="password">
-          {messages.login.passwordLabel}
+          {messages.login.passwordLabel}<RequiredMark />
         </label>
         <div className="relative">
           <Input

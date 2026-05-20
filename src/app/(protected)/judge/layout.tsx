@@ -18,7 +18,7 @@ export default async function JudgeLayout({
     redirect("/login");
   }
 
-  if (session.user.role !== "JUDGE" && session.user.role !== "ADMIN") {
+  if (session.user.role !== "JUDGE" && session.user.role !== "ADMIN" && session.user.role !== "CHIEF_JUDGE") {
     redirect(session.user.role === "TEAM" ? "/team" : "/admin");
   }
 

@@ -7,6 +7,7 @@ import { ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { setCompetitionScorerStatusAction } from "@/actions/team";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
+import { FeedbackMessage } from "@/components/shared/form-feedback";
 
 type ScoringParticipant = {
   id: string;
@@ -29,6 +30,7 @@ export function ScoringParticipantsButton({
     canScore: string;
     cannotScore: string;
     adminRole: string;
+    chiefJudgeRole: string;
     judgeRole: string;
     scorerUpdated: string;
     stalePageRefresh: string;
@@ -41,6 +43,14 @@ export function ScoringParticipantsButton({
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  function getRoleLabel(role: string) {
+    return role === "ADMIN" ? labels.adminRole : role === "CHIEF_JUDGE" ? labels.chiefJudgeRole : labels.judgeRole;
+  }
+
+  function getRoleTone(role: string): "blue" | "purple" | "green" {
+    return role === "ADMIN" ? "blue" : role === "CHIEF_JUDGE" ? "purple" : "green";
+  }
 
   function updateStatus(userId: string, canScore: boolean) {
     const participant = localParticipants.find((entry) => entry.id === userId);
@@ -107,8 +117,8 @@ export function ScoringParticipantsButton({
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-slate-950">{participant.name}</p>
-                      <Badge tone={participant.role === "ADMIN" ? "blue" : "green"}>
-                        {participant.role === "ADMIN" ? labels.adminRole : labels.judgeRole}
+                      <Badge tone={getRoleTone(participant.role)}>
+                        {getRoleLabel(participant.role)}
                       </Badge>
                     </div>
                     <p className="text-xs text-slate-500">
@@ -141,7 +151,7 @@ export function ScoringParticipantsButton({
                   </div>
                 </div>
               ))}
-              {message ? <p className="text-sm text-slate-500">{message}</p> : null}
+              <FeedbackMessage message={message} />
             </div>
           </div>
         </div>

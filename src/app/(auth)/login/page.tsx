@@ -7,7 +7,7 @@ export default async function LoginPage() {
   const session = await auth();
 
   if (session?.user) {
-    redirect(session.user.role === "ADMIN" ? "/admin" : session.user.role === "JUDGE" ? "/judge" : "/team");
+    redirect(session.user.role === "ADMIN" || session.user.role === "CHIEF_JUDGE" ? "/admin" : session.user.role === "JUDGE" ? "/judge" : "/team");
   }
 
   return <LoginClientShell />;

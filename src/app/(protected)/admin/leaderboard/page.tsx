@@ -1,13 +1,10 @@
 import Link from "next/link";
 
-import { JudgeScoreCards } from "@/components/admin/judge-score-cards";
+import { LeaderboardTable } from "@/components/admin/leaderboard-table";
 import { ScoringParticipantsButton } from "@/components/admin/scoring-participants-button";
 import { ScoringToggleButton } from "@/components/admin/scoring-toggle-button";
-import { Badge } from "@/components/shared/badge";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
 import { PageHeader } from "@/components/shared/page-header";
-import { ProgressBar } from "@/components/shared/progress-bar";
-import { DataTable, Table, TBody, TD, TH, THead } from "@/components/shared/table";
 import { getLeaderboardData } from "@/lib/data";
 import { getRequestI18n } from "@/lib/i18n-server";
 
@@ -42,6 +39,21 @@ export default async function AdminLeaderboardPage({
       edited: messages.common.statuses.edited,
       pending: messages.common.statuses.pending,
     },
+  };
+  const leaderboardTableLabels = {
+    rank: t.rank,
+    seq: t.seq,
+    team: t.team,
+    average: t.average,
+    progress: t.progress,
+    pendingJudges: t.pendingJudges,
+    perJudgeScores: t.perJudgeScores,
+    scoreDetails: t.scoreDetails,
+    submittedShort: t.submittedShort,
+    complete: t.complete,
+    minAverage: t.minAverage,
+    maxAverage: t.maxAverage,
+    noData: messages.common.labels.noData,
   };
 
   return (
@@ -91,6 +103,7 @@ export default async function AdminLeaderboardPage({
                 canScore: t.canScore,
                 cannotScore: t.cannotScore,
                 adminRole: messages.header.role.ADMIN,
+                chiefJudgeRole: messages.header.role.CHIEF_JUDGE,
                 judgeRole: messages.header.role.JUDGE,
                 scorerUpdated: t.scorerUpdated,
                 stalePageRefresh: t.stalePageRefresh,
@@ -119,66 +132,15 @@ export default async function AdminLeaderboardPage({
       ) : null}
       <Card>
         <CardHeader title={t.overallTitle} description={t.overallDesc} />
-        <CardContent className="p-0">
-          <Table>
-            <DataTable>
-              <THead>
-                <tr>
-                  <TH>{t.rank}</TH>
-                  <TH>{t.team}</TH>
-                  <TH>{t.average}</TH>
-                  <TH>{t.progress}</TH>
-                  <TH>{t.pendingJudges}</TH>
-                  <TH>{t.perJudgeScores}</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {data.overallRows.map((row) => (
-                  <tr key={row.id}>
-                    <TD className="font-semibold text-slate-950">#{row.rank}</TD>
-                    <TD>
-                      <div className="font-medium text-slate-950">
-                        {row.teamName} <span className="text-slate-400">({row.teamCode})</span>
-                      </div>
-                      <div className="text-xs text-slate-500">{row.projectTitle}</div>
-                    </TD>
-                    <TD>{row.averageScore.toFixed(2)}</TD>
-                    <TD className="min-w-[180px]">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>
-                            {row.submittedCount}/{row.expectedCount} {t.submittedShort}
-                          </span>
-                          <span>{row.completionRate}%</span>
-                        </div>
-                        <ProgressBar value={row.completionRate} />
-                      </div>
-                    </TD>
-                    <TD>
-                      {row.pendingJudgeNames.length ? (
-                        <div className="flex flex-wrap gap-2">
-                          {row.pendingJudgeNames.map((judgeName) => (
-                            <Badge key={judgeName} tone="amber">
-                              {judgeName}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <Badge tone="green">{t.complete}</Badge>
-                      )}
-                    </TD>
-                    <TD>
-                      <JudgeScoreCards
-                        judges={row.perJudgeScores}
-                        ariaLabel={t.perJudgeScores}
-                        labels={scoreCardLabels}
-                      />
-                    </TD>
-                  </tr>
-                ))}
-              </TBody>
-            </DataTable>
-          </Table>
+        <CardContent>
+          <LeaderboardTable
+            rows={data.overallRows}
+            labels={leaderboardTableLabels}
+            scoreCardLabels={scoreCardLabels}
+            showProgress
+            showPendingJudges
+            showPerJudgeScores
+          />
         </CardContent>
       </Card>
       <Card>
@@ -205,42 +167,12 @@ export default async function AdminLeaderboardPage({
             </div>
             <button className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white sm:w-auto">{t.applyJudge}</button>
           </form>
-          <Table>
-            <DataTable>
-              <THead>
-                <tr>
-                  <TH>{t.rank}</TH>
-                  <TH>{t.team}</TH>
-                  <TH>{t.average}</TH>
-                  <TH>{t.scoreDetails}</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {data.judgeRankingRows.map((row) => (
-                  <tr key={`${data.selectedJudgeRankingId}-${row.id}`}>
-                    <TD className="font-semibold text-slate-950">#{row.rank}</TD>
-                    <TD>
-                      <div className="font-medium text-slate-950">
-                        {row.teamName} <span className="text-slate-400">({row.teamCode})</span>
-                      </div>
-                      <div className="text-xs text-slate-500">{row.projectTitle}</div>
-                    </TD>
-                    <TD>{row.averageScore.toFixed(2)}</TD>
-                    <TD>
-                      <JudgeScoreCards
-                        judges={row.perJudgeScores}
-                        ariaLabel={t.scoreDetails}
-                        labels={scoreCardLabels}
-                      />
-                    </TD>
-                  </tr>
-                ))}
-              </TBody>
-            </DataTable>
-          </Table>
-          {!data.judgeRankingRows.length ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{messages.common.labels.noData}</div>
-          ) : null}
+          <LeaderboardTable
+            rows={data.judgeRankingRows}
+            labels={leaderboardTableLabels}
+            scoreCardLabels={scoreCardLabels}
+            showScoreDetails
+          />
         </CardContent>
       </Card>
       {data.categorySections.map((section) => (
@@ -264,57 +196,13 @@ export default async function AdminLeaderboardPage({
                 );
               })}
             </div>
-            <Table>
-              <DataTable>
-                <THead>
-                  <tr>
-                    <TH>{t.rank}</TH>
-                    <TH>{t.team}</TH>
-                    <TH>{t.average}</TH>
-                    <TH>{t.progress}</TH>
-                    <TH>{t.pendingJudges}</TH>
-                  </tr>
-                </THead>
-                <TBody>
-                  {section.rows.map((row) => (
-                    <tr key={row.id}>
-                      <TD className="font-semibold text-slate-950">#{row.rank}</TD>
-                      <TD>
-                        <div className="font-medium text-slate-950">
-                          {row.teamName} <span className="text-slate-400">({row.teamCode})</span>
-                        </div>
-                        <div className="text-xs text-slate-500">{row.projectTitle}</div>
-                      </TD>
-                      <TD>{row.averageScore.toFixed(2)}</TD>
-                      <TD className="min-w-[180px]">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs text-slate-500">
-                            <span>
-                              {row.submittedCount}/{row.expectedCount} {t.submittedShort}
-                            </span>
-                            <span>{row.completionRate}%</span>
-                          </div>
-                          <ProgressBar value={row.completionRate} />
-                        </div>
-                      </TD>
-                      <TD>
-                        {row.pendingJudgeNames.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {row.pendingJudgeNames.map((judgeName) => (
-                              <Badge key={judgeName} tone="amber">
-                                {judgeName}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <Badge tone="green">{t.complete}</Badge>
-                        )}
-                      </TD>
-                    </tr>
-                  ))}
-                </TBody>
-              </DataTable>
-            </Table>
+            <LeaderboardTable
+              rows={section.rows}
+              labels={leaderboardTableLabels}
+              scoreCardLabels={scoreCardLabels}
+              showProgress
+              showPendingJudges
+            />
           </CardContent>
         </Card>
       ))}

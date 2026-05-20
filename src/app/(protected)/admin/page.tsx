@@ -40,12 +40,13 @@ export default async function AdminDashboardPage() {
               </Link>
             }
           />
-          <CardContent className="p-0">
+          <CardContent className="max-h-[520px] overflow-y-auto p-0 [scrollbar-width:thin]">
             <Table>
               <DataTable>
                 <THead>
                 <tr>
                   <TH>{t.rank}</TH>
+                  <TH>{t.seq}</TH>
                   <TH>{t.team}</TH>
                   <TH>{messages.common.words.average}</TH>
                   <TH>{t.progress}</TH>
@@ -55,6 +56,7 @@ export default async function AdminDashboardPage() {
                   {data.leaderboard.map((team, index) => (
                     <tr key={team.id}>
                       <TD className="font-semibold text-slate-950">#{index + 1}</TD>
+                      <TD>{team.teamCode}</TD>
                       <TD>
                         <div className="font-medium text-slate-950">{team.teamName}</div>
                         <div className="text-xs text-slate-500">
@@ -91,18 +93,6 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
-      <Card>
-        <CardHeader title={t.categoryLeadersTitle} description={t.categoryLeadersDesc} />
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          {data.categorySummary.map((category) => (
-            <div key={category.categoryId ?? category.categoryName} className="rounded-2xl border border-slate-200 p-4">
-              <p className="text-sm text-slate-500">{category.categoryName}</p>
-              <p className="mt-2 font-semibold text-slate-950">{category.leader}</p>
-              <p className="mt-1 text-sm text-slate-500">{messages.common.words.average} {category.averageScore.toFixed(2)}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader title={t.judgeProgressTitle} description={t.judgeProgressDesc} />
         <CardContent className="p-0">

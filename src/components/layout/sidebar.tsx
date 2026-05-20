@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { BarChart3, ClipboardList, FolderOpen, ListChecks, Settings, Trophy, Upload, Users } from "lucide-react";
 
 import { useI18n } from "@/components/i18n/language-provider";
+import type { ShellRole } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -30,6 +31,13 @@ const adminItems: NavItem[] = [
   { href: "/admin/settings", labelKey: "settings", icon: Settings },
 ];
 
+const chiefJudgeItems: NavItem[] = [
+  { href: "/admin", labelKey: "dashboard", icon: BarChart3 },
+  { href: "/judge/teams", labelKey: "approvedWorks", icon: ListChecks },
+  { href: "/admin/comments", labelKey: "comments", icon: ClipboardList },
+  { href: "/admin/leaderboard", labelKey: "leaderboard", icon: Trophy },
+];
+
 const judgeItems: NavItem[] = [
   { href: "/judge", labelKey: "dashboard", icon: BarChart3 },
   { href: "/judge/teams", labelKey: "approvedWorks", icon: ListChecks },
@@ -41,12 +49,12 @@ const teamItems: NavItem[] = [
   { href: "/team/results", labelKey: "reviewStatus", icon: FolderOpen },
 ];
 
-function getRoleItems(role: "ADMIN" | "JUDGE" | "TEAM") {
-  return role === "ADMIN" ? adminItems : role === "JUDGE" ? judgeItems : teamItems;
+function getRoleItems(role: ShellRole) {
+  return role === "ADMIN" ? adminItems : role === "CHIEF_JUDGE" ? chiefJudgeItems : role === "JUDGE" ? judgeItems : teamItems;
 }
 
-function getRoleRootHref(role: "ADMIN" | "JUDGE" | "TEAM") {
-  return role === "ADMIN" ? "/admin" : role === "JUDGE" ? "/judge" : "/team";
+function getRoleRootHref(role: ShellRole) {
+  return role === "ADMIN" || role === "CHIEF_JUDGE" ? "/admin" : role === "JUDGE" ? "/judge" : "/team";
 }
 
 function isItemActive(
@@ -69,7 +77,7 @@ export function Sidebar({
   role,
   competitionName,
 }: {
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: ShellRole;
   competitionName: string;
 }) {
   const pathname = usePathname();
@@ -113,7 +121,7 @@ export function Sidebar({
 export function MobileRoleNav({
   role,
 }: {
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: ShellRole;
 }) {
   const pathname = usePathname();
   const { messages } = useI18n();

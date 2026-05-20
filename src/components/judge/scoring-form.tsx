@@ -9,6 +9,7 @@ import { useI18n } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
+import { FeedbackMessage } from "@/components/shared/form-feedback";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
@@ -446,7 +447,7 @@ export function ScoringForm({
             placeholder={t.judgeCommentPlaceholder}
           />
         </div>
-        {message ? <p className="text-sm text-slate-600">{message}</p> : null}
+        <FeedbackMessage message={message} />
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
             {navigation.previousTeamId ? (

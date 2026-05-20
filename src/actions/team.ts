@@ -36,10 +36,28 @@ function isStaleVersion(currentUpdatedAt: Date | null | undefined, expectedUpdat
   return Number.isNaN(expectedTime) || currentUpdatedAt.getTime() !== expectedTime;
 }
 
+function compareSequenceCode(left: string, right: string) {
+  return new Intl.Collator("en", { numeric: true, sensitivity: "base" }).compare(left, right);
+}
+
+function isAdminLikeRole(role: Role) {
+  return role === Role.ADMIN || role === Role.CHIEF_JUDGE;
+}
+
 async function requireAdmin() {
   const session = await auth();
 
   if (!session?.user || session.user.role !== Role.ADMIN) {
+    throw new Error("Unauthorized");
+  }
+
+  return session.user;
+}
+
+async function requireAdminLike() {
+  const session = await auth();
+
+  if (!session?.user || !isAdminLikeRole(session.user.role)) {
     throw new Error("Unauthorized");
   }
 
@@ -326,6 +344,70 @@ export async function deleteTeamAction(teamId: string, expectedUpdatedAt?: strin
   }
 
   await withSqliteWriteRetry(() => prisma.team.delete({ where: { id: teamId } }));
+
+  revalidateAppData();
+  return { success: true };
+}
+
+export async function reorderTeamSequenceAction(teamId: string, targetTeamId: string, expectedUpdatedAt?: string) {
+  await requireAdmin();
+
+  if (teamId === targetTeamId) {
+    return { success: true };
+  }
+
+  const result = await withSqliteWriteRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const [team, targetTeam] = await Promise.all([
+        tx.team.findUnique({ where: { id: teamId }, select: { id: true, updatedAt: true } }),
+        tx.team.findUnique({ where: { id: targetTeamId }, select: { id: true } }),
+      ]);
+
+      if (!team || !targetTeam) {
+        return { error: "Team not found." };
+      }
+
+      if (isStaleVersion(team.updatedAt, expectedUpdatedAt)) {
+        return staleAdminPageResult;
+      }
+
+      const teams = (await tx.team.findMany({
+        select: { id: true, teamCode: true },
+      })).sort((left, right) => compareSequenceCode(left.teamCode, right.teamCode));
+      const reordered = teams.filter((item) => item.id !== teamId);
+      const targetIndex = reordered.findIndex((item) => item.id === targetTeamId);
+
+      if (targetIndex < 0) {
+        return { error: "Target team not found." };
+      }
+
+      reordered.splice(targetIndex, 0, { id: teamId, teamCode: teamId });
+
+      await Promise.all(
+        reordered.map((item, index) =>
+          tx.team.update({
+            where: { id: item.id },
+            data: { teamCode: `__seq_${index + 1}_${item.id}` },
+          }),
+        ),
+      );
+
+      await Promise.all(
+        reordered.map((item, index) =>
+          tx.team.update({
+            where: { id: item.id },
+            data: { teamCode: String(index + 1) },
+          }),
+        ),
+      );
+
+      return { success: true as const };
+    }),
+  );
+
+  if ("error" in result && result.error) {
+    return result;
+  }
 
   revalidateAppData();
   return { success: true };
@@ -850,7 +932,7 @@ export async function updateSettingsAction(payload: {
 }
 
 export async function toggleCompetitionScoringAction(resume: boolean, competitionId?: string, expectedCompetitionUpdatedAt?: string) {
-  await requireAdmin();
+  await requireAdminLike();
 
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
   const targetCompetitionId = competitionId || settings?.competitionId;
@@ -896,7 +978,7 @@ export async function setCompetitionScorerStatusAction(payload: {
   canScore: boolean;
   expectedCanScore?: boolean;
 }) {
-  await requireAdmin();
+  await requireAdminLike();
 
   const competitionId = payload.competitionId?.trim();
   const userId = payload.userId?.trim();
@@ -929,7 +1011,7 @@ export async function setCompetitionScorerStatusAction(payload: {
     return { error: "Competition not found." };
   }
 
-  if (!user || !user.active || (user.role !== Role.ADMIN && user.role !== Role.JUDGE)) {
+  if (!user || !user.active || (!isAdminLikeRole(user.role) && user.role !== Role.JUDGE)) {
     return { error: "Selected account cannot be a scoring participant." };
   }
 
@@ -1207,7 +1289,7 @@ export async function upsertUserAccountAction(payload: {
   name: string;
   email: string;
   password?: string;
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM";
   active: boolean;
   linkedTeamId?: string;
   expectedUpdatedAt?: string;

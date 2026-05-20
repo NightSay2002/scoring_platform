@@ -5,6 +5,7 @@ import { Play, Square } from "lucide-react";
 
 import { toggleCompetitionScoringAction } from "@/actions/team";
 import { Button } from "@/components/shared/button";
+import { FeedbackMessage } from "@/components/shared/form-feedback";
 
 export function ScoringToggleButton({
   isClosed,
@@ -50,7 +51,7 @@ export function ScoringToggleButton({
         {closed ? <Play className="h-4 w-4" /> : <Square className="h-4 w-4" />}
         {closed ? labels.continueCompetition : labels.endCompetition}
       </Button>
-      {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+      <FeedbackMessage message={message} className="text-xs" />
     </div>
   );
 }

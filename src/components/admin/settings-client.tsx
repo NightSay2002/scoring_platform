@@ -26,6 +26,7 @@ import { useI18n } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
+import { FeedbackMessage, RequiredMark } from "@/components/shared/form-feedback";
 import { Input } from "@/components/shared/input";
 import { Textarea } from "@/components/shared/textarea";
 import { DataTable, Table, TBody, TD, TH, THead } from "@/components/shared/table";
@@ -103,7 +104,7 @@ type Account = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM";
   active: boolean;
   updatedAt: string;
   assignmentCount: number;
@@ -199,7 +200,7 @@ export function SettingsClient({
     name: "",
     email: "",
     password: "",
-    role: "JUDGE" as "ADMIN" | "JUDGE" | "TEAM",
+    role: "JUDGE" as "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM",
     active: true,
     linkedTeamId: "",
     expectedUpdatedAt: "",
@@ -794,7 +795,11 @@ export function SettingsClient({
   }
 
   function getRoleTone(role: Account["role"]) {
-    return role === "ADMIN" ? "blue" : role === "JUDGE" ? "green" : "amber";
+    return role === "ADMIN" ? "blue" : role === "CHIEF_JUDGE" ? "purple" : role === "JUDGE" ? "green" : "amber";
+  }
+
+  function getRoleLabel(role: Account["role"]) {
+    return role === "ADMIN" ? t.roleAdmin : role === "CHIEF_JUDGE" ? t.roleChiefJudge : role === "JUDGE" ? t.roleJudge : t.roleTeam;
   }
 
   return (
@@ -804,7 +809,7 @@ export function SettingsClient({
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.competitionLabel}</label>
+              <label className="text-sm font-medium text-slate-700">{t.competitionLabel}<RequiredMark /></label>
               <select
                 value={settingsForm.competitionId}
                 onChange={(event) => switchCompetition(event.target.value)}
@@ -819,7 +824,7 @@ export function SettingsClient({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.judgingRounds}</label>
+              <label className="text-sm font-medium text-slate-700">{t.judgingRounds}<RequiredMark /></label>
               <Input
                 type="number"
                 min={1}
@@ -830,11 +835,14 @@ export function SettingsClient({
           </div>
 
           <div className="grid gap-4 md:grid-cols-[1fr_2fr_auto]">
-            <Input
-              placeholder={t.newCompetitionNamePlaceholder}
-              value={competitionForm.name}
-              onChange={(event) => setCompetitionForm((current) => ({ ...current, name: event.target.value }))}
-            />
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">{t.competitionName}<RequiredMark /></span>
+              <Input
+                placeholder={t.newCompetitionNamePlaceholder}
+                value={competitionForm.name}
+                onChange={(event) => setCompetitionForm((current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
             <Input
               placeholder={t.newCompetitionDescriptionPlaceholder}
               value={competitionForm.description}
@@ -852,12 +860,15 @@ export function SettingsClient({
               <p className="mt-1 text-xs text-slate-500">{t.selectedCompetitionDetailsDesc}</p>
             </div>
             <div className="grid gap-4 md:grid-cols-[1fr_2fr_auto_auto]">
-              <Input
-                placeholder={t.competitionName}
-                value={competitionDetailsForm.name}
-                onChange={(event) => setCompetitionDetailsForm((current) => ({ ...current, name: event.target.value }))}
-                disabled={!settingsForm.competitionId}
-              />
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">{t.competitionName}<RequiredMark /></span>
+                <Input
+                  placeholder={t.competitionName}
+                  value={competitionDetailsForm.name}
+                  onChange={(event) => setCompetitionDetailsForm((current) => ({ ...current, name: event.target.value }))}
+                  disabled={!settingsForm.competitionId}
+                />
+              </label>
               <Input
                 placeholder={t.newCompetitionDescriptionPlaceholder}
                 value={competitionDetailsForm.description}
@@ -942,7 +953,7 @@ export function SettingsClient({
               {t.includeCommentsInExports}
             </label>
           </div>
-          {message ? <p className="text-sm text-slate-600">{message}</p> : null}
+          <FeedbackMessage message={message} />
           <div className="flex justify-end">
             <Button onClick={saveSettings} disabled={pending || !settingsForm.competitionId}>
               {pending ? t.saving : t.saveSettings}
@@ -994,7 +1005,10 @@ export function SettingsClient({
               </DataTable>
             </Table>
             <div className="grid gap-4 md:grid-cols-2">
-              <Input placeholder={t.categoryName} value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} />
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">{t.categoryName}<RequiredMark /></span>
+                <Input value={categoryForm.name} onChange={(event) => setCategoryForm((current) => ({ ...current, name: event.target.value }))} />
+              </label>
               <Input placeholder={t.displayOrder} type="number" value={categoryForm.displayOrder} onChange={(event) => setCategoryForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
             </div>
             <Textarea placeholder={t.categoryDescription} value={categoryForm.description} onChange={(event) => setCategoryForm((current) => ({ ...current, description: event.target.value }))} />
@@ -1101,7 +1115,7 @@ export function SettingsClient({
             </Table>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{t.categoryName}</label>
+                <label className="text-sm font-medium text-slate-700">{t.categoryName}<RequiredMark /></label>
                 <select
                   value={criterionForm.categoryId}
                   onChange={(event) => setCriterionForm((current) => ({ ...current, categoryId: event.target.value }))}
@@ -1116,7 +1130,7 @@ export function SettingsClient({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{t.criterionName}</label>
+                <label className="text-sm font-medium text-slate-700">{t.criterionName}<RequiredMark /></label>
                 <Input value={criterionForm.name} onChange={(event) => setCriterionForm((current) => ({ ...current, name: event.target.value }))} />
               </div>
               <div className="space-y-2">
@@ -1160,7 +1174,7 @@ export function SettingsClient({
               </div>
               <div className="mb-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">{t.parentCriterion}</label>
+                  <label className="text-sm font-medium text-slate-700">{t.parentCriterion}<RequiredMark /></label>
                   <select
                     value={subCriterionForm.criterionId}
                     onChange={(event) => {
@@ -1186,7 +1200,7 @@ export function SettingsClient({
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">{t.subCriterionName}</label>
+                  <label className="text-sm font-medium text-slate-700">{t.subCriterionName}<RequiredMark /></label>
                   <Input value={subCriterionForm.name} onChange={(event) => setSubCriterionForm((current) => ({ ...current, name: event.target.value }))} />
                 </div>
                 <div className="space-y-2">
@@ -1287,7 +1301,7 @@ export function SettingsClient({
                     </TD>
                     <TD>
                       <Badge tone={getRoleTone(account.role)}>
-                        {account.role === "ADMIN" ? t.roleAdmin : account.role === "JUDGE" ? t.roleJudge : t.roleTeam}
+                        {getRoleLabel(account.role)}
                       </Badge>
                     </TD>
                     <TD>
@@ -1308,7 +1322,9 @@ export function SettingsClient({
                           ? t.judgeAccount
                           : account.role === "TEAM"
                             ? t.teamSubmissionOwner
-                            : t.adminAccount}
+                            : account.role === "CHIEF_JUDGE"
+                              ? t.chiefJudgeAccount
+                              : t.adminAccount}
                       </div>
                     </TD>
                     <TD>
@@ -1332,20 +1348,27 @@ export function SettingsClient({
             </DataTable>
           </Table>
           <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 md:grid-cols-2">
-            <Input placeholder={t.namePlaceholder} value={accountForm.name} onChange={(event) => setAccountForm((current) => ({ ...current, name: event.target.value }))} />
-            <Input placeholder={t.emailPlaceholder} value={accountForm.email} onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))} />
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">{t.namePlaceholder}<RequiredMark /></span>
+              <Input value={accountForm.name} onChange={(event) => setAccountForm((current) => ({ ...current, name: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">{t.emailPlaceholder}<RequiredMark /></span>
+              <Input value={accountForm.email} onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))} />
+            </label>
             <select
               value={accountForm.role}
               onChange={(event) =>
                 setAccountForm((current) => ({
                   ...current,
-                  role: event.target.value as "ADMIN" | "JUDGE" | "TEAM",
+                  role: event.target.value as "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM",
                   linkedTeamId: event.target.value === "TEAM" ? current.linkedTeamId : "",
                 }))
               }
               className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
             >
               <option value="ADMIN">{t.roleAdmin}</option>
+              <option value="CHIEF_JUDGE">{t.roleChiefJudge}</option>
               <option value="JUDGE">{t.roleJudge}</option>
               <option value="TEAM">{t.roleTeam}</option>
             </select>

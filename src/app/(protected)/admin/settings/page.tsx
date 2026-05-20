@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
 import { PageHeader } from "@/components/shared/page-header";
 import { SettingsClient } from "@/components/admin/settings-client";
 import { getSettingsPageData } from "@/lib/data";
@@ -8,7 +11,11 @@ export default async function AdminSettingsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { messages } = await getRequestI18n();
+  const [session, { messages }] = await Promise.all([auth(), getRequestI18n()]);
+  if (session?.user.role === "CHIEF_JUDGE") {
+    redirect("/admin");
+  }
+
   const params = await searchParams;
   const competitionId = typeof params.competitionId === "string" ? params.competitionId : undefined;
   const data = await getSettingsPageData(competitionId);

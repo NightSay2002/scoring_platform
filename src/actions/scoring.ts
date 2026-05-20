@@ -68,7 +68,7 @@ function getScoringClosedMessage(
 async function requireScorer() {
   const session = await auth();
 
-  if (!session?.user || (session.user.role !== Role.JUDGE && session.user.role !== Role.ADMIN)) {
+  if (!session?.user || (session.user.role !== Role.JUDGE && session.user.role !== Role.ADMIN && session.user.role !== Role.CHIEF_JUDGE)) {
     throw new Error("Unauthorized");
   }
 
@@ -121,7 +121,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     }
   }
 
-  if (scorer.role !== Role.ADMIN && settings?.judgeScope === "ASSIGNED" && team.assignments.length === 0) {
+  if (scorer.role !== Role.ADMIN && scorer.role !== Role.CHIEF_JUDGE && settings?.judgeScope === "ASSIGNED" && team.assignments.length === 0) {
     return { error: "You are not assigned to this team." };
   }
 

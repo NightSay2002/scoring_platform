@@ -9,6 +9,7 @@ import { useI18n } from "@/components/i18n/language-provider";
 import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card, CardContent, CardHeader } from "@/components/shared/card";
+import { FeedbackMessage, RequiredMark } from "@/components/shared/form-feedback";
 import { Input } from "@/components/shared/input";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
@@ -233,13 +234,13 @@ export function TeamSubmissionForm({
             <Input value={form.teamCode || t.autoTeamCode} disabled />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.teamName}</label>
+            <label className="text-sm font-medium text-slate-700">{t.teamName}<RequiredMark /></label>
             <Input value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} disabled={locked || pending} />
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.competition}</label>
+            <label className="text-sm font-medium text-slate-700">{t.competition}<RequiredMark /></label>
             <select
               value={form.competitionId}
               onChange={(event) => handleCompetitionChange(event.target.value)}
@@ -255,7 +256,7 @@ export function TeamSubmissionForm({
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.projectCategory}</label>
+            <label className="text-sm font-medium text-slate-700">{t.projectCategory}<RequiredMark /></label>
             <select
               value={form.categoryId}
               onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
@@ -276,15 +277,15 @@ export function TeamSubmissionForm({
           </div>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">{t.projectTitle}</label>
+          <label className="text-sm font-medium text-slate-700">{t.projectTitle}<RequiredMark /></label>
           <Input value={form.projectTitle} onChange={(event) => setForm((current) => ({ ...current, projectTitle: event.target.value }))} disabled={locked || pending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">{t.projectDescription}</label>
+          <label className="text-sm font-medium text-slate-700">{t.projectDescription}<RequiredMark /></label>
           <Textarea value={form.projectDescription} onChange={(event) => setForm((current) => ({ ...current, projectDescription: event.target.value }))} disabled={locked || pending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-700">{t.teamMembers}</label>
+          <label className="text-sm font-medium text-slate-700">{t.teamMembers}<RequiredMark /></label>
           <Textarea
             value={form.teamMembers}
             onChange={(event) => setForm((current) => ({ ...current, teamMembers: event.target.value }))}
@@ -335,7 +336,7 @@ export function TeamSubmissionForm({
             ) : null}
           </div>
         </div>
-        {message ? <p className="text-sm text-slate-600">{message}</p> : null}
+        <FeedbackMessage message={message} />
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3">
           <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={handleDraftSave} disabled={locked || pending}>
             <Save className="h-4 w-4" />

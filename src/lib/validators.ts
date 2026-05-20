@@ -133,7 +133,7 @@ export const userAccountSchema = z.object({
   name: z.string().min(1, "Name is required."),
   email: z.string().email(),
   password: z.string().min(6).optional().or(z.literal("")),
-  role: z.enum(["ADMIN", "JUDGE", "TEAM"]),
+  role: z.enum(["ADMIN", "CHIEF_JUDGE", "JUDGE", "TEAM"]),
   active: z.boolean(),
   linkedTeamId: z.string().optional().or(z.literal("")),
 });

@@ -45,7 +45,7 @@ type CompetitionScorerStatus = { competitionId: string; userId: string; canScore
 const teamCodeCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
 const scoringParticipantWhere = {
-  role: { in: [Role.ADMIN, Role.JUDGE] },
+  role: { in: [Role.ADMIN, Role.CHIEF_JUDGE, Role.JUDGE] },
   active: true,
 } satisfies Prisma.UserWhereInput;
 
@@ -55,6 +55,10 @@ function compareTeamCodeValue(left: string, right: string) {
 
 function compareTeamCode<T extends { teamCode: string }>(left: T, right: T) {
   return compareTeamCodeValue(left.teamCode, right.teamCode);
+}
+
+function isAdminLikeRole(role: Role) {
+  return role === Role.ADMIN || role === Role.CHIEF_JUDGE;
 }
 
 function getCompetitionScoringParticipants(
@@ -169,7 +173,7 @@ function getAllVisibleJudgeIds(
   }
 
   const chiefJudgeIds = scoringParticipants
-    .filter((participant) => participant.role === Role.ADMIN)
+    .filter((participant) => isAdminLikeRole(participant.role))
     .map((participant) => participant.id);
   const enabledParticipantIds = new Set(scoringParticipants.map((participant) => participant.id));
   const assignedJudgeIds = team.assignments
@@ -376,7 +380,7 @@ export async function getAdminDashboardData() {
       !judgeCanScore
         ? []
         : settings?.judgeScope === "ASSIGNED"
-        ? judge.role === Role.ADMIN
+        ? isAdminLikeRole(judge.role)
           ? approvedTeams
           : approvedTeams.filter((team) => team.assignments.some((assignment) => assignment.judgeId === judge.id))
         : approvedTeams;
@@ -393,29 +397,6 @@ export async function getAdminDashboardData() {
       lastActivity: judge.scores[0]?.updatedAt ?? judge.lastLoginAt ?? judge.updatedAt,
     };
   });
-  const categoryLeaders = new Map<
-    string,
-    {
-      categoryId: string | null;
-      categoryName: string;
-      leader: string;
-      averageScore: number;
-    }
-  >();
-
-  for (const row of rankedRows) {
-    const categoryKey = row.categoryId ?? row.categoryName;
-
-    if (!categoryLeaders.has(categoryKey)) {
-      categoryLeaders.set(categoryKey, {
-        categoryId: row.categoryId,
-        categoryName: row.categoryName,
-        leader: row.teamName,
-        averageScore: row.averageScore,
-      });
-    }
-  }
-
   return {
     settings,
     stats: [
@@ -424,7 +405,7 @@ export async function getAdminDashboardData() {
       { label: "Pending approval", value: pendingApprovalTeams, help: "Waiting for admin review" },
       { label: "Submitted scores", value: `${submittedScores}/${expectedScores}`, help: "Completed scoring records" },
     ],
-    leaderboard: rankedRows.slice(0, 5),
+    leaderboard: rankedRows,
     recentAudits: recentAudits.map((audit) => ({
       id: audit.id,
       action: audit.action,
@@ -436,7 +417,6 @@ export async function getAdminDashboardData() {
     judgeProgress: judgeProgress.filter(
       (judge) => judge.assignedTeams || judge.draftCount || judge.submittedCount || judge.pendingCount,
     ),
-    categorySummary: Array.from(categoryLeaders.values()),
   };
 }
 
@@ -918,7 +898,7 @@ export async function getJudgeDashboardData(userId: string) {
     return null;
   }
 
-  const isChiefJudge = judge.role === Role.ADMIN;
+  const isChiefJudge = isAdminLikeRole(judge.role);
   const scorableTeams = teams.filter((team) =>
     canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId),
   );
@@ -1094,7 +1074,7 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
     orderBy: { displayOrder: "asc" },
   });
 
-  const isChiefJudge = role === Role.ADMIN;
+  const isChiefJudge = role === Role.ADMIN || role === Role.CHIEF_JUDGE;
   const scorableAllTeams = allTeams.filter((entry) =>
     canUserScoreCompetition(scoringStatuses, userId, entry.category?.competitionId),
   );

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 export default auth((req: {
-  auth?: { user?: { role?: "ADMIN" | "JUDGE" | "TEAM" } } | null;
+  auth?: { user?: { role?: "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM" } } | null;
   nextUrl: { pathname: string };
   url: string;
 }) => {
@@ -20,20 +20,20 @@ export default auth((req: {
   }
 
   if (isLoggedIn && pathname === "/login") {
-    const destination = role === "ADMIN" ? "/admin" : role === "JUDGE" ? "/judge" : "/team";
+    const destination = role === "ADMIN" || role === "CHIEF_JUDGE" ? "/admin" : role === "JUDGE" ? "/judge" : "/team";
     return NextResponse.redirect(new URL(destination, req.url));
   }
 
-  if (pathname.startsWith("/admin") && role !== "ADMIN") {
+  if (pathname.startsWith("/admin") && role !== "ADMIN" && role !== "CHIEF_JUDGE") {
     return NextResponse.redirect(new URL(role === "TEAM" ? "/team" : "/judge", req.url));
   }
 
-  if (pathname.startsWith("/judge") && role !== "JUDGE" && role !== "ADMIN") {
+  if (pathname.startsWith("/judge") && role !== "JUDGE" && role !== "ADMIN" && role !== "CHIEF_JUDGE") {
     return NextResponse.redirect(new URL(role === "TEAM" ? "/team" : "/admin", req.url));
   }
 
   if (pathname.startsWith("/team") && role !== "TEAM") {
-    return NextResponse.redirect(new URL(role === "ADMIN" ? "/admin" : "/judge", req.url));
+    return NextResponse.redirect(new URL(role === "ADMIN" || role === "CHIEF_JUDGE" ? "/admin" : "/judge", req.url));
   }
 
   return NextResponse.next();

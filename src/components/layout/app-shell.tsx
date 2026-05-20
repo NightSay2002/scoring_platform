@@ -1,6 +1,8 @@
 import { Header } from "@/components/layout/header";
 import { MobileRoleNav, Sidebar } from "@/components/layout/sidebar";
 
+export type ShellRole = "ADMIN" | "CHIEF_JUDGE" | "JUDGE" | "TEAM";
+
 export function AppShell({
   children,
   userName,
@@ -9,7 +11,7 @@ export function AppShell({
 }: {
   children: React.ReactNode;
   userName: string;
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: ShellRole;
   competitionName: string;
 }) {
   return (

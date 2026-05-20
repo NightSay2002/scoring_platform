@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { LanguageToggle } from "@/components/i18n/language-toggle";
 import { useI18n } from "@/components/i18n/language-provider";
+import type { ShellRole } from "@/components/layout/app-shell";
 import { Button } from "@/components/shared/button";
 import { Badge } from "@/components/shared/badge";
 
@@ -13,10 +14,10 @@ export function Header({
   role,
 }: {
   userName: string;
-  role: "ADMIN" | "JUDGE" | "TEAM";
+  role: ShellRole;
 }) {
   const { messages } = useI18n();
-  const tone = role === "ADMIN" ? "blue" : role === "JUDGE" ? "green" : "amber";
+  const tone = role === "ADMIN" ? "blue" : role === "CHIEF_JUDGE" ? "purple" : role === "JUDGE" ? "green" : "amber";
   const label = messages.header.role[role];
 
   return (
