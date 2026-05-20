@@ -63,13 +63,31 @@ function getWeightStyle(weight: number, weights: number[]): CSSProperties {
 }
 
 function normalizeScoreInput(value: string, minScore: number, maxScore: number) {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) {
+  const [integerPart = "", ...decimalParts] = value.replace(/[^\d.]/g, "").split(".");
+  const normalizedInteger = integerPart.replace(/^0+(?=\d)/, "") || "0";
+  const decimalPart = decimalParts.join("").slice(0, 2);
+  const normalized = decimalParts.length ? `${normalizedInteger}.${decimalPart}` : normalizedInteger;
+
+  if (!normalized || normalized === ".") {
     return minScore;
   }
 
   const cappedMax = Math.min(maxScore, 100);
-  return Math.min(Math.max(Number(digits), minScore), cappedMax);
+  return Math.min(Math.max(Number(normalized), minScore), cappedMax);
+}
+
+function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, number>) {
+  const weightedSubScore = criterion.subCriteria.reduce(
+    (sum, subCriterion) => sum + Number(subScoreMap[subCriterion.id] ?? subCriterion.minScore) * (subCriterion.weight / 100),
+    0,
+  );
+  const weightedSubMax = criterion.subCriteria.reduce((sum, subCriterion) => sum + subCriterion.maxScore * (subCriterion.weight / 100), 0);
+
+  if (weightedSubMax <= 0) {
+    return 0;
+  }
+
+  return round((weightedSubScore / weightedSubMax) * criterion.maxScore);
 }
 
 export function ScoringForm({
@@ -151,12 +169,7 @@ export function ScoringForm({
         return Number(scoreMap[criterion.id] ?? criterion.minScore);
       }
 
-      return round(
-        criterion.subCriteria.reduce(
-          (sum, subCriterion) => sum + Number(subScoreMap[subCriterion.id] ?? subCriterion.minScore) * (subCriterion.weight / 100),
-          0,
-        ),
-      );
+      return getScaledCriterionScore(criterion, subScoreMap);
     },
     [scoreMap, subScoreMap],
   );
@@ -361,8 +374,8 @@ export function ScoringForm({
                         </div>
                         <input
                           type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
+                          inputMode="decimal"
+                          pattern="[0-9.]*"
                           min={subCriterion.minScore}
                           max={subCriterion.maxScore}
                           value={subScoreMap[subCriterion.id] ?? subCriterion.minScore}
@@ -389,8 +402,8 @@ export function ScoringForm({
                 <>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    inputMode="decimal"
+                    pattern="[0-9.]*"
                     min={criterion.minScore}
                     max={criterion.maxScore}
                     value={scoreMap[criterion.id] ?? criterion.minScore}

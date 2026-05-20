@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 import {
   addCompetitionImageAction,
@@ -13,6 +13,8 @@ import {
   deleteCriterionAction,
   deleteCriterionSubItemAction,
   deleteUserAccountAction,
+  reorderCriterionAction,
+  reorderCriterionSubItemAction,
   updateSettingsAction,
   updateCompetitionAction,
   upsertCategoryAction,
@@ -205,6 +207,8 @@ export function SettingsClient({
   const [criteriaFilterCategoryId, setCriteriaFilterCategoryId] = useState("");
   const [settingsUpdatedAt, setSettingsUpdatedAt] = useState(settings?.updatedAt ?? "");
   const [message, setMessage] = useState("");
+  const [draggingCriterionId, setDraggingCriterionId] = useState<string | null>(null);
+  const [draggingSubCriterionId, setDraggingSubCriterionId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const projectedCategoryWeight = useMemo(() => {
@@ -572,6 +576,31 @@ export function SettingsClient({
     }));
   }
 
+  function reorderCriterion(sourceId: string | null, target: Criterion) {
+    if (!sourceId || sourceId === target.id) {
+      setDraggingCriterionId(null);
+      return;
+    }
+
+    const source = criteria.find((item) => item.id === sourceId);
+    if (!source) {
+      setDraggingCriterionId(null);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await reorderCriterionAction(source.id, target.id, source.updatedAt);
+      setDraggingCriterionId(null);
+      if (result && "error" in result && result.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      setMessage(t.orderSaved);
+      router.refresh();
+    });
+  }
+
   function editSubCriterion(item: SubCriterion) {
     setSubCriterionForm({
       id: item.id,
@@ -584,6 +613,31 @@ export function SettingsClient({
       displayOrder: item.displayOrder,
       active: item.active,
       expectedUpdatedAt: item.updatedAt,
+    });
+  }
+
+  function reorderSubCriterion(sourceId: string | null, target: SubCriterion) {
+    if (!sourceId || sourceId === target.id) {
+      setDraggingSubCriterionId(null);
+      return;
+    }
+
+    const source = criteria.flatMap((item) => item.subCriteria).find((item) => item.id === sourceId);
+    if (!source) {
+      setDraggingSubCriterionId(null);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await reorderCriterionSubItemAction(source.id, target.id, source.updatedAt);
+      setDraggingSubCriterionId(null);
+      if (result && "error" in result && result.error) {
+        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
+        return;
+      }
+
+      setMessage(t.orderSaved);
+      router.refresh();
     });
   }
 
@@ -979,6 +1033,7 @@ export function SettingsClient({
               <DataTable>
                 <THead>
                   <tr>
+                    <TH>{t.reorderLabel}</TH>
                     <TH>{t.categoryName}</TH>
                     <TH>{t.criterionName}</TH>
                     <TH>{t.rangeLabel}</TH>
@@ -990,7 +1045,18 @@ export function SettingsClient({
                 </THead>
                 <TBody>
                   {filteredCriteria.map((item) => (
-                    <tr key={item.id}>
+                    <tr
+                      key={item.id}
+                      draggable={!pending}
+                      onDragStart={() => setDraggingCriterionId(item.id)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => reorderCriterion(draggingCriterionId, item)}
+                      onDragEnd={() => setDraggingCriterionId(null)}
+                      className={draggingCriterionId === item.id ? "opacity-50" : ""}
+                    >
+                      <TD>
+                        <GripVertical className="h-4 w-4 cursor-move text-slate-400" aria-label={t.dragToReorder} />
+                      </TD>
                       <TD>{item.categoryName}</TD>
                       <TD>
                         <div className="font-medium text-slate-950">{item.name}</div>
@@ -1055,15 +1121,15 @@ export function SettingsClient({
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">{t.displayOrder}</label>
-                <Input type="number" value={criterionForm.displayOrder} onChange={(event) => setCriterionForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
+                <Input type="number" step="1" value={criterionForm.displayOrder} onChange={(event) => setCriterionForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">{t.minScore}</label>
-                <Input type="number" value={criterionForm.minScore} onChange={(event) => setCriterionForm((current) => ({ ...current, minScore: Number(event.target.value) }))} />
+                <Input type="number" step="0.01" value={criterionForm.minScore} onChange={(event) => setCriterionForm((current) => ({ ...current, minScore: Number(event.target.value) }))} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">{t.maxScore}</label>
-                <Input type="number" value={criterionForm.maxScore} onChange={(event) => setCriterionForm((current) => ({ ...current, maxScore: Number(event.target.value) }))} />
+                <Input type="number" step="0.01" value={criterionForm.maxScore} onChange={(event) => setCriterionForm((current) => ({ ...current, maxScore: Number(event.target.value) }))} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">{t.weight} (%)</label>
@@ -1125,7 +1191,7 @@ export function SettingsClient({
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">{t.displayOrder}</label>
-                  <Input type="number" value={subCriterionForm.displayOrder} onChange={(event) => setSubCriterionForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
+                  <Input type="number" step="1" value={subCriterionForm.displayOrder} onChange={(event) => setSubCriterionForm((current) => ({ ...current, displayOrder: Number(event.target.value) }))} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">{t.weight} (%)</label>
@@ -1133,11 +1199,11 @@ export function SettingsClient({
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">{t.minScore}</label>
-                  <Input type="number" value={subCriterionForm.minScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, minScore: Number(event.target.value) }))} />
+                  <Input type="number" step="0.01" value={subCriterionForm.minScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, minScore: Number(event.target.value) }))} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">{t.maxScore}</label>
-                  <Input type="number" value={subCriterionForm.maxScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, maxScore: Number(event.target.value) }))} />
+                  <Input type="number" step="0.01" value={subCriterionForm.maxScore} onChange={(event) => setSubCriterionForm((current) => ({ ...current, maxScore: Number(event.target.value) }))} />
                 </div>
                 <label className="flex items-center gap-3 text-sm text-slate-700 md:col-span-2">
                   <input type="checkbox" checked={subCriterionForm.active} onChange={(event) => setSubCriterionForm((current) => ({ ...current, active: event.target.checked }))} />
@@ -1154,12 +1220,25 @@ export function SettingsClient({
                     .slice()
                     .sort((a, b) => a.displayOrder - b.displayOrder)
                     .map((subCriterion) => (
-                      <div key={subCriterion.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
+                      <div
+                        key={subCriterion.id}
+                        draggable={!pending}
+                        onDragStart={() => setDraggingSubCriterionId(subCriterion.id)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => reorderSubCriterion(draggingSubCriterionId, subCriterion)}
+                        onDragEnd={() => setDraggingSubCriterionId(null)}
+                        className={`flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between ${
+                          draggingSubCriterionId === subCriterion.id ? "opacity-50" : ""
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <GripVertical className="mt-0.5 h-4 w-4 cursor-move text-slate-400" aria-label={t.dragToReorder} />
+                          <div>
                           <p className="text-sm font-medium text-slate-950">{subCriterion.name}</p>
                           <p className="text-xs text-slate-500">
                             {subCriterion.minScore} - {subCriterion.maxScore} · {subCriterion.weight}% · {subCriterion.active ? common.statuses.active : common.statuses.inactive}
                           </p>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button variant="ghost" size="sm" onClick={() => editSubCriterion(subCriterion)}>

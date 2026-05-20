@@ -30,6 +30,21 @@ const scorePayloadSchema = z.object({
   ),
 });
 
+function getScaledCriterionScore(
+  criterion: { maxScore: number },
+  subCriteria: Array<{ id: string; maxScore: number; weight: number }>,
+  subItems: Array<{ subCriterionId: string; numericScore: number; weightedValue: number }>,
+) {
+  const weightedSubScore = subItems.reduce((sum, subItem) => sum + subItem.weightedValue, 0);
+  const weightedSubMax = subCriteria.reduce((sum, subCriterion) => sum + subCriterion.maxScore * (subCriterion.weight / 100), 0);
+
+  if (weightedSubMax <= 0) {
+    return 0;
+  }
+
+  return round((weightedSubScore / weightedSubMax) * criterion.maxScore);
+}
+
 function getScoringClosedMessage(
   settings: { competitionId: string | null; scoringPaused: boolean; submissionDeadline: Date | null; deadlineOverride: boolean } | null,
   competition?: { id: string; scoringPaused: boolean; deadlineOverride: boolean } | null,
@@ -195,7 +210,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
         return { error: `All active sub-criteria for ${criterion.name} must be scored.` };
       }
 
-      numericScore = round(normalizedSubItems.reduce((sum, subItem) => sum + subItem.weightedValue, 0));
+      numericScore = getScaledCriterionScore(criterion, subCriteria, normalizedSubItems);
 
       if (numericScore < criterion.minScore || numericScore > criterion.maxScore) {
         return { error: `${criterion.name} sub-score total must be between ${criterion.minScore} and ${criterion.maxScore}.` };

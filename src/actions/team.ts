@@ -430,6 +430,67 @@ export async function upsertCriterionAction(payload: {
   return { success: true };
 }
 
+export async function reorderCriterionAction(criterionId: string, targetCriterionId: string, expectedUpdatedAt?: string) {
+  await requireAdmin();
+
+  if (criterionId === targetCriterionId) {
+    return { success: true };
+  }
+
+  const result = await withSqliteWriteRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const [criterion, targetCriterion] = await Promise.all([
+        tx.criterion.findUnique({ where: { id: criterionId }, select: { id: true, categoryId: true, updatedAt: true } }),
+        tx.criterion.findUnique({ where: { id: targetCriterionId }, select: { id: true, categoryId: true } }),
+      ]);
+
+      if (!criterion || !targetCriterion) {
+        return { error: "Criterion not found." };
+      }
+
+      if (criterion.categoryId !== targetCriterion.categoryId) {
+        return { error: "Criteria can only be reordered within the same category." };
+      }
+
+      if (isStaleVersion(criterion.updatedAt, expectedUpdatedAt)) {
+        return staleAdminPageResult;
+      }
+
+      const siblings = await tx.criterion.findMany({
+        where: { categoryId: criterion.categoryId },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        select: { id: true },
+      });
+      const reordered = siblings.filter((item) => item.id !== criterionId);
+      const targetIndex = reordered.findIndex((item) => item.id === targetCriterionId);
+
+      if (targetIndex < 0) {
+        return { error: "Target criterion not found." };
+      }
+
+      reordered.splice(targetIndex, 0, { id: criterionId });
+
+      await Promise.all(
+        reordered.map((item, index) =>
+          tx.criterion.update({
+            where: { id: item.id },
+            data: { displayOrder: index + 1 },
+          }),
+        ),
+      );
+
+      return { success: true as const };
+    }),
+  );
+
+  if ("error" in result && result.error) {
+    return result;
+  }
+
+  revalidateAppData();
+  return { success: true };
+}
+
 export async function deleteCriterionAction(criterionId: string, expectedUpdatedAt?: string) {
   await requireAdmin();
   const currentCriterion = await prisma.criterion.findUnique({
@@ -537,6 +598,67 @@ export async function upsertCriterionSubItemAction(payload: {
       } else {
         await tx.criterionSubItem.create({ data });
       }
+
+      return { success: true as const };
+    }),
+  );
+
+  if ("error" in result && result.error) {
+    return result;
+  }
+
+  revalidateAppData();
+  return { success: true };
+}
+
+export async function reorderCriterionSubItemAction(subCriterionId: string, targetSubCriterionId: string, expectedUpdatedAt?: string) {
+  await requireAdmin();
+
+  if (subCriterionId === targetSubCriterionId) {
+    return { success: true };
+  }
+
+  const result = await withSqliteWriteRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const [subCriterion, targetSubCriterion] = await Promise.all([
+        tx.criterionSubItem.findUnique({ where: { id: subCriterionId }, select: { id: true, criterionId: true, updatedAt: true } }),
+        tx.criterionSubItem.findUnique({ where: { id: targetSubCriterionId }, select: { id: true, criterionId: true } }),
+      ]);
+
+      if (!subCriterion || !targetSubCriterion) {
+        return { error: "Sub-criterion not found." };
+      }
+
+      if (subCriterion.criterionId !== targetSubCriterion.criterionId) {
+        return { error: "Sub-criteria can only be reordered within the same parent criterion." };
+      }
+
+      if (isStaleVersion(subCriterion.updatedAt, expectedUpdatedAt)) {
+        return staleAdminPageResult;
+      }
+
+      const siblings = await tx.criterionSubItem.findMany({
+        where: { criterionId: subCriterion.criterionId },
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+        select: { id: true },
+      });
+      const reordered = siblings.filter((item) => item.id !== subCriterionId);
+      const targetIndex = reordered.findIndex((item) => item.id === targetSubCriterionId);
+
+      if (targetIndex < 0) {
+        return { error: "Target sub-criterion not found." };
+      }
+
+      reordered.splice(targetIndex, 0, { id: subCriterionId });
+
+      await Promise.all(
+        reordered.map((item, index) =>
+          tx.criterionSubItem.update({
+            where: { id: item.id },
+            data: { displayOrder: index + 1 },
+          }),
+        ),
+      );
 
       return { success: true as const };
     }),

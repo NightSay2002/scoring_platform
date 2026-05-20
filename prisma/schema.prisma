@@ -155,8 +155,8 @@ model Criterion {
   categoryId    String
   name         String
   description  String?
-  minScore     Int
-  maxScore     Int
+  minScore     Float
+  maxScore     Float
   weight       Float       @default(0)
   displayOrder Int         @default(0)
   active       Boolean     @default(true)
@@ -174,8 +174,8 @@ model CriterionSubItem {
   criterionId  String
   name         String
   description  String?
-  minScore     Int
-  maxScore     Int
+  minScore     Float
+  maxScore     Float
   weight       Float       @default(0)
   displayOrder Int         @default(0)
   active       Boolean     @default(true)
