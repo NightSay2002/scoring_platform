@@ -175,16 +175,20 @@ export function ScoringForm({
     [scoreMap, subScoreMap],
   );
 
+  const getCriterionContributionScore = useCallback(
+    (criterion: Criterion) => round(getCriterionNumericScore(criterion) * (criterion.weight / 100)),
+    [getCriterionNumericScore],
+  );
+
   const totals = useMemo(() => {
     const averageScore = criteria.reduce((sum, criterion) => {
-      const numericScore = getCriterionNumericScore(criterion);
-      return sum + numericScore * (criterion.weight / 100);
+      return sum + getCriterionContributionScore(criterion);
     }, 0);
 
     return {
       averageScore: round(averageScore),
     };
-  }, [criteria, getCriterionNumericScore]);
+  }, [criteria, getCriterionContributionScore]);
 
   const completionRate = navigation.totalTeams ? round((navigation.submittedCount / navigation.totalTeams) * 100, 0) : 0;
   const locked = scoringClosed || ((status === "SUBMITTED" || status === "EDITED") && !allowEditAfterSubmit);
@@ -344,7 +348,7 @@ export function ScoringForm({
               {criterion.subCriteria.length ? (
                 <>
                   <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">
-                    {getCriterionNumericScore(criterion).toFixed(2)}
+                    {getCriterionContributionScore(criterion).toFixed(2)}
                   </div>
                   <div className="space-y-3 md:col-span-3">
                     {criterion.subCriteria.map((subCriterion) => (
@@ -414,7 +418,7 @@ export function ScoringForm({
                     className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   />
                   <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">
-                    {t.weightedPrefix} {round((scoreMap[criterion.id] ?? 0) * (criterion.weight / 100)).toFixed(2)}
+                    {t.weightedPrefix} {getCriterionContributionScore(criterion).toFixed(2)}
                   </div>
                 </>
               )}
