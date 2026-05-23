@@ -13,7 +13,7 @@ import { FeedbackMessage } from "@/components/shared/form-feedback";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
-import { getScoreContribution } from "@/lib/scoring";
+import { clampScoreToRange, getScoreContribution } from "@/lib/scoring";
 import { round } from "@/lib/utils";
 
 type Criterion = {
@@ -52,6 +52,8 @@ type ExistingScore = {
   }>;
 } | null;
 
+type ScoreInputValue = number | string;
+
 function getWeightStyle(weight: number, weights: number[]): CSSProperties {
   const minWeight = Math.min(...weights);
   const maxWeight = Math.max(...weights);
@@ -65,22 +67,48 @@ function getWeightStyle(weight: number, weights: number[]): CSSProperties {
 }
 
 function normalizeScoreInput(value: string, minScore: number, maxScore: number) {
-  const [integerPart = "", ...decimalParts] = value.replace(/[^\d.]/g, "").split(".");
+  const trimmed = value.trim();
+  const sign = minScore < 0 && trimmed.startsWith("-") ? "-" : "";
+  const unsignedValue = trimmed.replace(/-/g, "").replace(/[^\d.]/g, "");
+  const [integerPart = "", ...decimalParts] = unsignedValue.split(".");
   const normalizedInteger = integerPart.replace(/^0+(?=\d)/, "") || "0";
   const decimalPart = decimalParts.join("").slice(0, 2);
-  const normalized = decimalParts.length ? `${normalizedInteger}.${decimalPart}` : normalizedInteger;
+  const normalized = `${sign}${decimalParts.length ? `${normalizedInteger}.${decimalPart}` : normalizedInteger}`;
 
-  if (!normalized || normalized === ".") {
-    return minScore;
+  if (!unsignedValue && sign) {
+    return sign;
+  }
+
+  if (!unsignedValue || unsignedValue === ".") {
+    return "";
   }
 
   const cappedMax = Math.min(maxScore, 100);
-  return Math.min(Math.max(Number(normalized), minScore), cappedMax);
+  const normalizedNumber = Number(normalized);
+  if (!Number.isFinite(normalizedNumber)) {
+    return "";
+  }
+
+  const clamped = Math.min(Math.max(normalizedNumber, minScore), cappedMax);
+  if (clamped !== normalizedNumber) {
+    return String(clamped);
+  }
+
+  return normalized;
 }
 
-function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, number>) {
+function getNumericInputValue(value: ScoreInputValue | undefined, minScore: number, maxScore: number) {
+  if (value === "" || value === "-" || value === undefined) {
+    return minScore <= 0 && maxScore >= 0 ? 0 : minScore;
+  }
+
+  return clampScoreToRange({ minScore, maxScore }, Number(value));
+}
+
+function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, ScoreInputValue>) {
   const weightedSubScore = criterion.subCriteria.reduce(
-    (sum, subCriterion) => sum + getScoreContribution(subCriterion, Number(subScoreMap[subCriterion.id] ?? subCriterion.minScore)),
+    (sum, subCriterion) =>
+      sum + getScoreContribution(subCriterion, getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore)),
     0,
   );
   const weightedSubMax = criterion.subCriteria.reduce(
@@ -122,7 +150,7 @@ export function ScoringForm({
   const t = messages.scoringForm;
   const common = messages.common;
   const criterionWeights = useMemo(() => criteria.map((criterion) => criterion.weight), [criteria]);
-  const [scoreMap, setScoreMap] = useState<Record<string, number>>(
+  const [scoreMap, setScoreMap] = useState<Record<string, ScoreInputValue>>(
     Object.fromEntries(
       criteria.map((criterion) => [
         criterion.id,
@@ -130,7 +158,7 @@ export function ScoringForm({
       ]),
     ),
   );
-  const [subScoreMap, setSubScoreMap] = useState<Record<string, number>>(
+  const [subScoreMap, setSubScoreMap] = useState<Record<string, ScoreInputValue>>(
     Object.fromEntries(
       criteria.flatMap((criterion) =>
         criterion.subCriteria.map((subCriterion) => {
@@ -171,7 +199,7 @@ export function ScoringForm({
   const getCriterionNumericScore = useCallback(
     (criterion: Criterion) => {
       if (!criterion.subCriteria.length) {
-        return Number(scoreMap[criterion.id] ?? criterion.minScore);
+        return getNumericInputValue(scoreMap[criterion.id], criterion.minScore, criterion.maxScore);
       }
 
       return getScaledCriterionScore(criterion, subScoreMap);
@@ -241,7 +269,7 @@ export function ScoringForm({
         comment: criterionCommentMap[criterion.id] ?? "",
         subItems: criterion.subCriteria.map((subCriterion) => ({
           subCriterionId: subCriterion.id,
-          numericScore: Number(subScoreMap[subCriterion.id]),
+          numericScore: getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore),
           comment: subCriterionCommentMap[subCriterion.id] ?? "",
         })),
       })),
@@ -383,8 +411,8 @@ export function ScoringForm({
                         </div>
                         <input
                           type="text"
-                          inputMode="decimal"
-                          pattern="[0-9.]*"
+                          inputMode={subCriterion.minScore < 0 ? "text" : "decimal"}
+                          pattern="-?[0-9.]*"
                           min={subCriterion.minScore}
                           max={subCriterion.maxScore}
                           value={subScoreMap[subCriterion.id] ?? subCriterion.minScore}
@@ -394,7 +422,7 @@ export function ScoringForm({
                           className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                         />
                         <div className="rounded-xl bg-white px-3 py-3 text-sm text-slate-600">
-                          {t.weightedPrefix} {getScoreContribution(subCriterion, subScoreMap[subCriterion.id] ?? 0).toFixed(2)}
+                          {t.weightedPrefix} {getScoreContribution(subCriterion, getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore)).toFixed(2)}
                         </div>
                         <Textarea
                           value={subCriterionCommentMap[subCriterion.id] ?? ""}
@@ -411,8 +439,8 @@ export function ScoringForm({
                 <>
                   <input
                     type="text"
-                    inputMode="decimal"
-                    pattern="[0-9.]*"
+                    inputMode={criterion.minScore < 0 ? "text" : "decimal"}
+                    pattern="-?[0-9.]*"
                     min={criterion.minScore}
                     max={criterion.maxScore}
                     value={scoreMap[criterion.id] ?? criterion.minScore}

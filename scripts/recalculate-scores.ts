@@ -14,12 +14,18 @@ function clampScore(item: { minScore: number; maxScore: number }, numericScore: 
   return Math.min(Math.max(numericScore, item.minScore), item.maxScore);
 }
 
+function getScoreScale(item: { minScore: number; maxScore: number }) {
+  return Math.max(Math.abs(item.minScore), Math.abs(item.maxScore));
+}
+
 function getScoreContribution(item: { minScore: number; maxScore: number; weight: number }, numericScore: number) {
-  if (!Number.isFinite(item.maxScore) || item.maxScore <= 0 || !Number.isFinite(item.weight)) {
+  const scale = getScoreScale(item);
+
+  if (scale <= 0 || !Number.isFinite(item.weight)) {
     return 0;
   }
 
-  return round((clampScore(item, numericScore) / item.maxScore) * item.weight);
+  return round((clampScore(item, numericScore) / scale) * item.weight);
 }
 
 async function main() {

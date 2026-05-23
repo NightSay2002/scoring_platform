@@ -50,12 +50,14 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
-function getScoreContribution(score: number, maxScore: number, weight: number) {
-  if (!Number.isFinite(maxScore) || maxScore <= 0 || !Number.isFinite(weight)) {
+function getScoreContribution(score: number, minScore: number, maxScore: number, weight: number) {
+  const scale = Math.max(Math.abs(minScore), Math.abs(maxScore));
+
+  if (scale <= 0 || !Number.isFinite(weight)) {
     return 0;
   }
 
-  return round((score / maxScore) * weight);
+  return round((Math.min(Math.max(score, minScore), maxScore) / scale) * weight);
 }
 
 async function main() {
@@ -211,6 +213,7 @@ async function main() {
     string,
     Array<{
       id: string;
+      minScore: number;
       maxScore: number;
       weight: number;
     }>
@@ -225,6 +228,7 @@ async function main() {
           },
           select: {
             id: true,
+            minScore: true,
             maxScore: true,
             weight: true,
           },
@@ -372,7 +376,13 @@ async function main() {
     const weightedScore = round(
       input.scores.reduce(
         (sum, value, index) =>
-          sum + getScoreContribution(value, categoryRule[index]?.maxScore ?? 100, categoryRule[index]?.weight ?? 0),
+          sum +
+          getScoreContribution(
+            value,
+            categoryRule[index]?.minScore ?? 0,
+            categoryRule[index]?.maxScore ?? 100,
+            categoryRule[index]?.weight ?? 0,
+          ),
         0,
       ),
     );
@@ -392,7 +402,7 @@ async function main() {
           create: categoryRule.map((criterion, index) => ({
             criterionId: criterion.id,
             numericScore: input.scores[index] ?? 0,
-            weightedValue: getScoreContribution(input.scores[index] ?? 0, criterion.maxScore, criterion.weight),
+            weightedValue: getScoreContribution(input.scores[index] ?? 0, criterion.minScore, criterion.maxScore, criterion.weight),
           })),
         },
         audits: {
