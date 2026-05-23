@@ -253,6 +253,7 @@ function getRankedRows(
                   .map((item) => ({
                     criterionName: item.criterion.name,
                     numericScore: item.numericScore,
+                    weightedValue: item.weightedValue,
                     comment: item.comment,
                     subScores: item.subItems
                       .slice()

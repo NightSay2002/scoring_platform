@@ -15,6 +15,7 @@ type JudgeScore = {
   criterionScores: Array<{
     criterionName: string;
     numericScore: number;
+    weightedValue: number;
     comment: string;
     subScores: Array<{
       subCriterionName: string;
@@ -128,7 +129,7 @@ export function JudgeScoreCards({
                 <div className="mt-1 flex-1 space-y-1 overflow-hidden">
                   {judge.criterionScores.map((item) => (
                     <span key={`${judge.judgeName}-${item.criterionName}`} className="block truncate">
-                      {item.criterionName}: {item.numericScore.toFixed(0)}
+                      {item.criterionName}: {item.weightedValue.toFixed(2)}
                     </span>
                   ))}
                 </div>
@@ -189,7 +190,7 @@ export function JudgeScoreCards({
                   selectedJudge.criterionScores.map((item) => (
                     <div key={`${selectedJudge.judgeName}-${item.criterionName}-detail`} className="rounded-xl border border-slate-200 p-3">
                       <p className="font-semibold text-slate-900">
-                        {item.criterionName}: {item.numericScore.toFixed(0)}
+                        {item.criterionName}: {item.weightedValue.toFixed(2)}
                       </p>
                       {item.subScores.length ? (
                         <div className="mt-3 space-y-2 border-l-2 border-slate-200 pl-3">

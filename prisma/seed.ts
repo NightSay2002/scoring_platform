@@ -50,6 +50,14 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
+function getScoreContribution(score: number, maxScore: number, weight: number) {
+  if (!Number.isFinite(maxScore) || maxScore <= 0 || !Number.isFinite(weight)) {
+    return 0;
+  }
+
+  return round((score / maxScore) * weight);
+}
+
 async function main() {
   await prisma.scoreAudit.deleteMany();
   await prisma.scoreItem.deleteMany();
@@ -203,6 +211,7 @@ async function main() {
     string,
     Array<{
       id: string;
+      maxScore: number;
       weight: number;
     }>
   >();
@@ -216,6 +225,7 @@ async function main() {
           },
           select: {
             id: true,
+            maxScore: true,
             weight: true,
           },
         }),
@@ -360,7 +370,11 @@ async function main() {
   }) {
     const categoryRule = categoryCriteria.get(input.categoryId) ?? [];
     const weightedScore = round(
-      input.scores.reduce((sum, value, index) => sum + value * ((categoryRule[index]?.weight ?? 0) / 100), 0),
+      input.scores.reduce(
+        (sum, value, index) =>
+          sum + getScoreContribution(value, categoryRule[index]?.maxScore ?? 100, categoryRule[index]?.weight ?? 0),
+        0,
+      ),
     );
     const totalScore = round(input.scores.reduce((sum, value) => sum + value, 0) / (input.scores.length || 1));
 
@@ -378,7 +392,7 @@ async function main() {
           create: categoryRule.map((criterion, index) => ({
             criterionId: criterion.id,
             numericScore: input.scores[index] ?? 0,
-            weightedValue: round((input.scores[index] ?? 0) * (criterion.weight / 100)),
+            weightedValue: getScoreContribution(input.scores[index] ?? 0, criterion.maxScore, criterion.weight),
           })),
         },
         audits: {

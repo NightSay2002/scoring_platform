@@ -115,6 +115,18 @@ type Account = {
   categoryName: string;
 };
 
+function getWeightTotalClassName(totalWeight: number) {
+  if (totalWeight > 100.0001) {
+    return "text-rose-600";
+  }
+
+  if (totalWeight < 99.9999) {
+    return "text-amber-600";
+  }
+
+  return "text-emerald-700";
+}
+
 export function SettingsClient({
   settings,
   competitions,
@@ -1157,7 +1169,7 @@ export function SettingsClient({
                 </label>
               </div>
             </div>
-            <p className={`text-xs ${projectedCategoryWeight > 100 ? "text-rose-600" : "text-slate-500"}`}>
+            <p className={`text-xs ${getWeightTotalClassName(projectedCategoryWeight)}`}>
               {t.activeWeightPreview} {projectedCategoryWeight.toFixed(2)}%
             </p>
             <Textarea placeholder={t.criterionDescription} value={criterionForm.description} onChange={(event) => setCriterionForm((current) => ({ ...current, description: event.target.value }))} />
@@ -1225,7 +1237,7 @@ export function SettingsClient({
                 </label>
               </div>
               <Textarea placeholder={t.subCriterionDescription} value={subCriterionForm.description} onChange={(event) => setSubCriterionForm((current) => ({ ...current, description: event.target.value }))} />
-              <p className={`mt-3 text-xs ${projectedSubCriterionWeight > 100 ? "text-rose-600" : "text-slate-500"}`}>
+              <p className={`mt-3 text-xs ${getWeightTotalClassName(projectedSubCriterionWeight)}`}>
                 {t.activeSubWeightPreview} {projectedSubCriterionWeight.toFixed(2)}%
               </p>
               {selectedCriterionForSubItems?.subCriteria.length ? (

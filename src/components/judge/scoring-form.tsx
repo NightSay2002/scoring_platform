@@ -13,6 +13,7 @@ import { FeedbackMessage } from "@/components/shared/form-feedback";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
+import { getScoreContribution } from "@/lib/scoring";
 import { round } from "@/lib/utils";
 
 type Criterion = {
@@ -79,10 +80,13 @@ function normalizeScoreInput(value: string, minScore: number, maxScore: number) 
 
 function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, number>) {
   const weightedSubScore = criterion.subCriteria.reduce(
-    (sum, subCriterion) => sum + Number(subScoreMap[subCriterion.id] ?? subCriterion.minScore) * (subCriterion.weight / 100),
+    (sum, subCriterion) => sum + getScoreContribution(subCriterion, Number(subScoreMap[subCriterion.id] ?? subCriterion.minScore)),
     0,
   );
-  const weightedSubMax = criterion.subCriteria.reduce((sum, subCriterion) => sum + subCriterion.maxScore * (subCriterion.weight / 100), 0);
+  const weightedSubMax = criterion.subCriteria.reduce(
+    (sum, subCriterion) => sum + getScoreContribution(subCriterion, subCriterion.maxScore),
+    0,
+  );
 
   if (weightedSubMax <= 0) {
     return 0;
@@ -176,7 +180,7 @@ export function ScoringForm({
   );
 
   const getCriterionContributionScore = useCallback(
-    (criterion: Criterion) => round(getCriterionNumericScore(criterion) * (criterion.weight / 100)),
+    (criterion: Criterion) => getScoreContribution(criterion, getCriterionNumericScore(criterion)),
     [getCriterionNumericScore],
   );
 
@@ -390,7 +394,7 @@ export function ScoringForm({
                           className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                         />
                         <div className="rounded-xl bg-white px-3 py-3 text-sm text-slate-600">
-                          {t.weightedPrefix} {round((subScoreMap[subCriterion.id] ?? 0) * (subCriterion.weight / 100)).toFixed(2)}
+                          {t.weightedPrefix} {getScoreContribution(subCriterion, subScoreMap[subCriterion.id] ?? 0).toFixed(2)}
                         </div>
                         <Textarea
                           value={subCriterionCommentMap[subCriterion.id] ?? ""}

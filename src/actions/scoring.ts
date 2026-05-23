@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getScoreContribution } from "@/lib/scoring";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
 import { round } from "@/lib/utils";
 
@@ -36,7 +37,10 @@ function getScaledCriterionScore(
   subItems: Array<{ subCriterionId: string; numericScore: number; weightedValue: number }>,
 ) {
   const weightedSubScore = subItems.reduce((sum, subItem) => sum + subItem.weightedValue, 0);
-  const weightedSubMax = subCriteria.reduce((sum, subCriterion) => sum + subCriterion.maxScore * (subCriterion.weight / 100), 0);
+  const weightedSubMax = subCriteria.reduce(
+    (sum, subCriterion) => sum + getScoreContribution(subCriterion, subCriterion.maxScore),
+    0,
+  );
 
   if (weightedSubMax <= 0) {
     return 0;
@@ -153,8 +157,8 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
   }
 
   const totalWeight = criteria.reduce((sum, criterion) => sum + criterion.weight, 0);
-  if (Math.abs(totalWeight - 100) > 0.001) {
-    return { error: "Category criteria weights must total exactly 100% before scoring." };
+  if (totalWeight > 100.0001) {
+    return { error: "Category criteria weights cannot exceed 100% before scoring." };
   }
 
   const criteriaMap = new Map(criteria.map((criterion) => [criterion.id, criterion]));
@@ -179,8 +183,8 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
 
     if (subCriteria.length) {
       const subWeight = subCriteria.reduce((sum, subCriterion) => sum + subCriterion.weight, 0);
-      if (Math.abs(subWeight - 100) > 0.001) {
-        return { error: `${criterion.name} sub-criteria weights must total exactly 100% before scoring.` };
+      if (subWeight > 100.0001) {
+        return { error: `${criterion.name} sub-criteria weights cannot exceed 100% before scoring.` };
       }
 
       const subCriteriaMap = new Map(subCriteria.map((subCriterion) => [subCriterion.id, subCriterion]));
@@ -201,7 +205,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
         normalizedSubItems.push({
           subCriterionId: subCriterion.id,
           numericScore: subItem.numericScore,
-          weightedValue: round(subItem.numericScore * (subCriterion.weight / 100)),
+          weightedValue: getScoreContribution(subCriterion, subItem.numericScore),
           comment: subItem.comment.trim(),
         });
       }
@@ -219,7 +223,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
       normalizedItems.push({
         criterionId: criterion.id,
         numericScore,
-        weightedValue: round(numericScore * (criterion.weight / 100)),
+        weightedValue: getScoreContribution(criterion, numericScore),
         comment: item.comment.trim(),
         subItems: normalizedSubItems,
       });
@@ -234,7 +238,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     normalizedItems.push({
       criterionId: criterion.id,
       numericScore,
-      weightedValue: round(numericScore * (criterion.weight / 100)),
+      weightedValue: getScoreContribution(criterion, numericScore),
       comment: item.comment.trim(),
       subItems: [],
     });
