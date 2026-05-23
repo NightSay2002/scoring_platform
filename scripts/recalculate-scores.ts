@@ -6,12 +6,20 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
-function getScoreContribution(item: { maxScore: number; weight: number }, numericScore: number) {
+function clampScore(item: { minScore: number; maxScore: number }, numericScore: number) {
+  if (!Number.isFinite(numericScore)) {
+    return item.minScore;
+  }
+
+  return Math.min(Math.max(numericScore, item.minScore), item.maxScore);
+}
+
+function getScoreContribution(item: { minScore: number; maxScore: number; weight: number }, numericScore: number) {
   if (!Number.isFinite(item.maxScore) || item.maxScore <= 0 || !Number.isFinite(item.weight)) {
     return 0;
   }
 
-  return round((numericScore / item.maxScore) * item.weight);
+  return round((clampScore(item, numericScore) / item.maxScore) * item.weight);
 }
 
 async function main() {
@@ -36,10 +44,15 @@ async function main() {
 
   for (const score of scores) {
     const itemUpdates = score.items.map((item) => {
-      const subItemUpdates = item.subItems.map((subItem) => ({
-        id: subItem.id,
-        weightedValue: getScoreContribution(subItem.subCriterion, subItem.numericScore),
-      }));
+      const subItemUpdates = item.subItems.map((subItem) => {
+        const numericScore = clampScore(subItem.subCriterion, subItem.numericScore);
+
+        return {
+          id: subItem.id,
+          numericScore,
+          weightedValue: getScoreContribution(subItem.subCriterion, numericScore),
+        };
+      });
       const subWeightedScore = subItemUpdates.reduce((sum, subItem) => sum + subItem.weightedValue, 0);
       const subWeightedMax = item.subItems.reduce(
         (sum, subItem) => sum + getScoreContribution(subItem.subCriterion, subItem.subCriterion.maxScore),
@@ -47,7 +60,7 @@ async function main() {
       );
       const numericScore = item.subItems.length && subWeightedMax > 0
         ? round((subWeightedScore / subWeightedMax) * item.criterion.maxScore)
-        : item.numericScore;
+        : clampScore(item.criterion, item.numericScore);
 
       return {
         id: item.id,
@@ -63,7 +76,10 @@ async function main() {
         item.subItemUpdates.map((subItem) =>
           prisma.scoreSubItem.update({
             where: { id: subItem.id },
-            data: { weightedValue: subItem.weightedValue },
+            data: {
+              numericScore: subItem.numericScore,
+              weightedValue: subItem.weightedValue,
+            },
           }),
         ),
       ),
