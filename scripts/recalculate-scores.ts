@@ -6,16 +6,29 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
+function getEffectiveScoreRange(item: { minScore: number; maxScore: number }) {
+  const mirroredNegativeMinScore = item.maxScore > 0 ? -Math.abs(item.maxScore) : item.minScore;
+
+  return {
+    minScore: Math.min(item.minScore, mirroredNegativeMinScore),
+    maxScore: item.maxScore,
+  };
+}
+
 function clampScore(item: { minScore: number; maxScore: number }, numericScore: number) {
+  const range = getEffectiveScoreRange(item);
+
   if (!Number.isFinite(numericScore)) {
-    return item.minScore;
+    return range.minScore;
   }
 
-  return Math.min(Math.max(numericScore, item.minScore), item.maxScore);
+  return Math.min(Math.max(numericScore, range.minScore), range.maxScore);
 }
 
 function getScoreScale(item: { minScore: number; maxScore: number }) {
-  return Math.max(Math.abs(item.minScore), Math.abs(item.maxScore));
+  const range = getEffectiveScoreRange(item);
+
+  return Math.max(Math.abs(range.minScore), Math.abs(range.maxScore));
 }
 
 function getScoreContribution(item: { minScore: number; maxScore: number; weight: number }, numericScore: number) {

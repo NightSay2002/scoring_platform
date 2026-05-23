@@ -6,19 +6,29 @@ export type WeightedScoringItem = {
   weight: number;
 };
 
+export function getEffectiveScoreRange(item: { minScore?: number; maxScore: number }) {
+  const configuredMinScore = Number.isFinite(item.minScore) ? item.minScore ?? 0 : 0;
+  const maxScore = Number.isFinite(item.maxScore) ? item.maxScore : 0;
+  const mirroredNegativeMinScore = maxScore > 0 ? -Math.abs(maxScore) : configuredMinScore;
+
+  return {
+    minScore: Math.min(configuredMinScore, mirroredNegativeMinScore),
+    maxScore,
+  };
+}
+
 export function clampScoreToRange(item: { minScore?: number; maxScore: number }, numericScore: number) {
-  const minScore = Number.isFinite(item.minScore) ? item.minScore ?? 0 : 0;
+  const { minScore, maxScore } = getEffectiveScoreRange(item);
 
   if (!Number.isFinite(numericScore)) {
     return minScore;
   }
 
-  return Math.min(Math.max(numericScore, minScore), item.maxScore);
+  return Math.min(Math.max(numericScore, minScore), maxScore);
 }
 
 export function getScoreScale(item: { minScore?: number; maxScore: number }) {
-  const minScore = Number.isFinite(item.minScore) ? item.minScore ?? 0 : 0;
-  const maxScore = Number.isFinite(item.maxScore) ? item.maxScore : 0;
+  const { minScore, maxScore } = getEffectiveScoreRange(item);
 
   return Math.max(Math.abs(minScore), Math.abs(maxScore));
 }

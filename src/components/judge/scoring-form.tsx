@@ -13,7 +13,7 @@ import { FeedbackMessage } from "@/components/shared/form-feedback";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
-import { clampScoreToRange, getScoreContribution } from "@/lib/scoring";
+import { clampScoreToRange, getEffectiveScoreRange, getScoreContribution } from "@/lib/scoring";
 import { round } from "@/lib/utils";
 
 type Criterion = {
@@ -67,8 +67,9 @@ function getWeightStyle(weight: number, weights: number[]): CSSProperties {
 }
 
 function normalizeScoreInput(value: string, minScore: number, maxScore: number) {
+  const range = getEffectiveScoreRange({ minScore, maxScore });
   const trimmed = value.trim();
-  const sign = minScore < 0 && trimmed.startsWith("-") ? "-" : "";
+  const sign = range.minScore < 0 && trimmed.startsWith("-") ? "-" : "";
   const unsignedValue = trimmed.replace(/-/g, "").replace(/[^\d.]/g, "");
   const [integerPart = "", ...decimalParts] = unsignedValue.split(".");
   const normalizedInteger = integerPart.replace(/^0+(?=\d)/, "") || "0";
@@ -89,7 +90,7 @@ function normalizeScoreInput(value: string, minScore: number, maxScore: number) 
     return "";
   }
 
-  const clamped = Math.min(Math.max(normalizedNumber, minScore), cappedMax);
+  const clamped = Math.min(Math.max(normalizedNumber, range.minScore), cappedMax);
   if (clamped !== normalizedNumber) {
     return String(clamped);
   }
@@ -98,11 +99,19 @@ function normalizeScoreInput(value: string, minScore: number, maxScore: number) 
 }
 
 function getNumericInputValue(value: ScoreInputValue | undefined, minScore: number, maxScore: number) {
+  const range = getEffectiveScoreRange({ minScore, maxScore });
+
   if (value === "" || value === "-" || value === undefined) {
-    return minScore <= 0 && maxScore >= 0 ? 0 : minScore;
+    return range.minScore <= 0 && range.maxScore >= 0 ? 0 : range.minScore;
   }
 
   return clampScoreToRange({ minScore, maxScore }, Number(value));
+}
+
+function formatScoreRange(item: { minScore: number; maxScore: number }) {
+  const range = getEffectiveScoreRange(item);
+
+  return `${range.minScore} - ${range.maxScore}`;
 }
 
 function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, ScoreInputValue>) {
@@ -367,7 +376,7 @@ export function ScoringForm({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{criterion.subCriteria.length ? t.weight : t.rangeWeightLabel}</p>
                   <div className="mt-1 text-sm" style={getWeightStyle(criterion.weight, criterionWeights)}>
-                    {criterion.subCriteria.length ? `${criterion.weight}%` : `${criterion.minScore} - ${criterion.maxScore} | ${criterion.weight}%`}
+                    {criterion.subCriteria.length ? `${criterion.weight}%` : `${formatScoreRange(criterion)} | ${criterion.weight}%`}
                   </div>
                 </div>
                 {criterion.description ? (
@@ -399,7 +408,7 @@ export function ScoringForm({
                                 criterion.subCriteria.map((item) => item.weight),
                               )}
                             >
-                              {subCriterion.minScore} - {subCriterion.maxScore} | {subCriterion.weight}%
+                              {formatScoreRange(subCriterion)} | {subCriterion.weight}%
                             </div>
                           </div>
                           {subCriterion.description ? (
@@ -411,9 +420,9 @@ export function ScoringForm({
                         </div>
                         <input
                           type="text"
-                          inputMode={subCriterion.minScore < 0 ? "text" : "decimal"}
+                          inputMode={getEffectiveScoreRange(subCriterion).minScore < 0 ? "text" : "decimal"}
                           pattern="-?[0-9.]*"
-                          min={subCriterion.minScore}
+                          min={getEffectiveScoreRange(subCriterion).minScore}
                           max={subCriterion.maxScore}
                           value={subScoreMap[subCriterion.id] ?? subCriterion.minScore}
                           disabled={locked || pending}
@@ -439,9 +448,9 @@ export function ScoringForm({
                 <>
                   <input
                     type="text"
-                    inputMode={criterion.minScore < 0 ? "text" : "decimal"}
+                    inputMode={getEffectiveScoreRange(criterion).minScore < 0 ? "text" : "decimal"}
                     pattern="-?[0-9.]*"
-                    min={criterion.minScore}
+                    min={getEffectiveScoreRange(criterion).minScore}
                     max={criterion.maxScore}
                     value={scoreMap[criterion.id] ?? criterion.minScore}
                     disabled={locked || pending}

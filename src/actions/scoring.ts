@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getScoreContribution } from "@/lib/scoring";
+import { getEffectiveScoreRange, getScoreContribution } from "@/lib/scoring";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
 import { round } from "@/lib/utils";
 
@@ -196,9 +196,10 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
           return { error: "One or more sub-criteria are invalid." };
         }
 
-        if (subItem.numericScore < subCriterion.minScore || subItem.numericScore > subCriterion.maxScore) {
+        const subCriterionRange = getEffectiveScoreRange(subCriterion);
+        if (subItem.numericScore < subCriterionRange.minScore || subItem.numericScore > subCriterionRange.maxScore) {
           return {
-            error: `${subCriterion.name} must be between ${subCriterion.minScore} and ${subCriterion.maxScore}.`,
+            error: `${subCriterion.name} must be between ${subCriterionRange.minScore} and ${subCriterionRange.maxScore}.`,
           };
         }
 
@@ -216,8 +217,9 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
 
       numericScore = getScaledCriterionScore(criterion, subCriteria, normalizedSubItems);
 
-      if (numericScore < criterion.minScore || numericScore > criterion.maxScore) {
-        return { error: `${criterion.name} sub-score total must be between ${criterion.minScore} and ${criterion.maxScore}.` };
+      const criterionRange = getEffectiveScoreRange(criterion);
+      if (numericScore < criterionRange.minScore || numericScore > criterionRange.maxScore) {
+        return { error: `${criterion.name} sub-score total must be between ${criterionRange.minScore} and ${criterionRange.maxScore}.` };
       }
 
       normalizedItems.push({
@@ -231,8 +233,9 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
       continue;
     }
 
-    if (numericScore < criterion.minScore || numericScore > criterion.maxScore) {
-      return { error: `${criterion.name} must be between ${criterion.minScore} and ${criterion.maxScore}.` };
+    const criterionRange = getEffectiveScoreRange(criterion);
+    if (numericScore < criterionRange.minScore || numericScore > criterionRange.maxScore) {
+      return { error: `${criterion.name} must be between ${criterionRange.minScore} and ${criterionRange.maxScore}.` };
     }
 
     normalizedItems.push({

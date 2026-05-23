@@ -51,13 +51,14 @@ function round(value: number, digits = 2) {
 }
 
 function getScoreContribution(score: number, minScore: number, maxScore: number, weight: number) {
-  const scale = Math.max(Math.abs(minScore), Math.abs(maxScore));
+  const effectiveMinScore = Math.min(minScore, maxScore > 0 ? -Math.abs(maxScore) : minScore);
+  const scale = Math.max(Math.abs(effectiveMinScore), Math.abs(maxScore));
 
   if (scale <= 0 || !Number.isFinite(weight)) {
     return 0;
   }
 
-  return round((Math.min(Math.max(score, minScore), maxScore) / scale) * weight);
+  return round((Math.min(Math.max(score, effectiveMinScore), maxScore) / scale) * weight);
 }
 
 async function main() {
