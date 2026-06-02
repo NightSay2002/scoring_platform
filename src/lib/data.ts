@@ -796,6 +796,7 @@ export async function getSettingsPageData(competitionId?: string) {
       description: criterion.description,
       minScore: criterion.minScore,
       maxScore: criterion.maxScore,
+      allowNegativeScore: criterion.allowNegativeScore,
       weight: criterion.weight,
       displayOrder: criterion.displayOrder,
       active: criterion.active,

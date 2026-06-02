@@ -158,6 +158,7 @@ model Criterion {
   description  String?
   minScore     Float
   maxScore     Float
+  allowNegativeScore Boolean @default(false)
   weight       Float       @default(0)
   displayOrder Int         @default(0)
   active       Boolean     @default(true)

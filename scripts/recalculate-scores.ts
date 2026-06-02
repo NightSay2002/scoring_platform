@@ -6,7 +6,14 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
-function getEffectiveScoreRange(item: { minScore: number; maxScore: number }) {
+function getEffectiveScoreRange(item: { minScore: number; maxScore: number; allowNegativeScore?: boolean }) {
+  if (!item.allowNegativeScore) {
+    return {
+      minScore: Math.max(item.minScore, 0),
+      maxScore: Math.max(item.maxScore, 0),
+    };
+  }
+
   const mirroredNegativeMinScore = item.maxScore > 0 ? -Math.abs(item.maxScore) : item.minScore;
 
   return {
@@ -15,7 +22,7 @@ function getEffectiveScoreRange(item: { minScore: number; maxScore: number }) {
   };
 }
 
-function clampScore(item: { minScore: number; maxScore: number }, numericScore: number) {
+function clampScore(item: { minScore: number; maxScore: number; allowNegativeScore?: boolean }, numericScore: number) {
   const range = getEffectiveScoreRange(item);
 
   if (!Number.isFinite(numericScore)) {
@@ -25,13 +32,13 @@ function clampScore(item: { minScore: number; maxScore: number }, numericScore: 
   return Math.min(Math.max(numericScore, range.minScore), range.maxScore);
 }
 
-function getScoreScale(item: { minScore: number; maxScore: number }) {
+function getScoreScale(item: { minScore: number; maxScore: number; allowNegativeScore?: boolean }) {
   const range = getEffectiveScoreRange(item);
 
   return Math.max(Math.abs(range.minScore), Math.abs(range.maxScore));
 }
 
-function getScoreContribution(item: { minScore: number; maxScore: number; weight: number }, numericScore: number) {
+function getScoreContribution(item: { minScore: number; maxScore: number; allowNegativeScore?: boolean; weight: number }, numericScore: number) {
   const scale = getScoreScale(item);
 
   if (scale <= 0 || !Number.isFinite(item.weight)) {
@@ -64,17 +71,26 @@ async function main() {
   for (const score of scores) {
     const itemUpdates = score.items.map((item) => {
       const subItemUpdates = item.subItems.map((subItem) => {
-        const numericScore = clampScore(subItem.subCriterion, subItem.numericScore);
+        const subCriterionScoringConfig = {
+          ...subItem.subCriterion,
+          allowNegativeScore: item.criterion.allowNegativeScore,
+        };
+        const numericScore = clampScore(subCriterionScoringConfig, subItem.numericScore);
 
         return {
           id: subItem.id,
           numericScore,
-          weightedValue: getScoreContribution(subItem.subCriterion, numericScore),
+          weightedValue: getScoreContribution(subCriterionScoringConfig, numericScore),
         };
       });
       const subWeightedScore = subItemUpdates.reduce((sum, subItem) => sum + subItem.weightedValue, 0);
       const subWeightedMax = item.subItems.reduce(
-        (sum, subItem) => sum + getScoreContribution(subItem.subCriterion, subItem.subCriterion.maxScore),
+        (sum, subItem) =>
+          sum +
+          getScoreContribution(
+            { ...subItem.subCriterion, allowNegativeScore: item.criterion.allowNegativeScore },
+            subItem.subCriterion.maxScore,
+          ),
         0,
       );
       const numericScore = item.subItems.length && subWeightedMax > 0

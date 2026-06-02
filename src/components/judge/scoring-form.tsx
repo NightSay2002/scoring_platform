@@ -22,6 +22,7 @@ type Criterion = {
   description: string | null;
   minScore: number;
   maxScore: number;
+  allowNegativeScore: boolean;
   weight: number;
   displayOrder: number;
   subCriteria: Array<{
@@ -66,8 +67,8 @@ function getWeightStyle(weight: number, weights: number[]): CSSProperties {
   };
 }
 
-function normalizeScoreInput(value: string, minScore: number, maxScore: number) {
-  const range = getEffectiveScoreRange({ minScore, maxScore });
+function normalizeScoreInput(value: string, minScore: number, maxScore: number, allowNegativeScore: boolean) {
+  const range = getEffectiveScoreRange({ minScore, maxScore, allowNegativeScore });
   const trimmed = value.trim();
   const sign = range.minScore < 0 && trimmed.startsWith("-") ? "-" : "";
   const unsignedValue = trimmed.replace(/-/g, "").replace(/[^\d.]/g, "");
@@ -98,17 +99,17 @@ function normalizeScoreInput(value: string, minScore: number, maxScore: number) 
   return normalized;
 }
 
-function getNumericInputValue(value: ScoreInputValue | undefined, minScore: number, maxScore: number) {
-  const range = getEffectiveScoreRange({ minScore, maxScore });
+function getNumericInputValue(value: ScoreInputValue | undefined, minScore: number, maxScore: number, allowNegativeScore: boolean) {
+  const range = getEffectiveScoreRange({ minScore, maxScore, allowNegativeScore });
 
   if (value === "" || value === "-" || value === undefined) {
     return range.minScore <= 0 && range.maxScore >= 0 ? 0 : range.minScore;
   }
 
-  return clampScoreToRange({ minScore, maxScore }, Number(value));
+  return clampScoreToRange({ minScore, maxScore, allowNegativeScore }, Number(value));
 }
 
-function formatScoreRange(item: { minScore: number; maxScore: number }) {
+function formatScoreRange(item: { minScore: number; maxScore: number; allowNegativeScore: boolean }) {
   const range = getEffectiveScoreRange(item);
 
   return `${range.minScore} - ${range.maxScore}`;
@@ -117,11 +118,15 @@ function formatScoreRange(item: { minScore: number; maxScore: number }) {
 function getScaledCriterionScore(criterion: Criterion, subScoreMap: Record<string, ScoreInputValue>) {
   const weightedSubScore = criterion.subCriteria.reduce(
     (sum, subCriterion) =>
-      sum + getScoreContribution(subCriterion, getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore)),
+      sum +
+      getScoreContribution(
+        { ...subCriterion, allowNegativeScore: criterion.allowNegativeScore },
+        getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore, criterion.allowNegativeScore),
+      ),
     0,
   );
   const weightedSubMax = criterion.subCriteria.reduce(
-    (sum, subCriterion) => sum + getScoreContribution(subCriterion, subCriterion.maxScore),
+    (sum, subCriterion) => sum + getScoreContribution({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore }, subCriterion.maxScore),
     0,
   );
 
@@ -208,7 +213,7 @@ export function ScoringForm({
   const getCriterionNumericScore = useCallback(
     (criterion: Criterion) => {
       if (!criterion.subCriteria.length) {
-        return getNumericInputValue(scoreMap[criterion.id], criterion.minScore, criterion.maxScore);
+        return getNumericInputValue(scoreMap[criterion.id], criterion.minScore, criterion.maxScore, criterion.allowNegativeScore);
       }
 
       return getScaledCriterionScore(criterion, subScoreMap);
@@ -234,10 +239,10 @@ export function ScoringForm({
   const completionRate = navigation.totalTeams ? round((navigation.submittedCount / navigation.totalTeams) * 100, 0) : 0;
   const locked = scoringClosed || ((status === "SUBMITTED" || status === "EDITED") && !allowEditAfterSubmit);
 
-  function updateScore(criterionId: string, value: string, minScore: number, maxScore: number) {
+  function updateScore(criterionId: string, value: string, minScore: number, maxScore: number, allowNegativeScore: boolean) {
     setScoreMap((current) => ({
       ...current,
-      [criterionId]: normalizeScoreInput(value, minScore, maxScore),
+      [criterionId]: normalizeScoreInput(value, minScore, maxScore, allowNegativeScore),
     }));
   }
 
@@ -248,10 +253,10 @@ export function ScoringForm({
     }));
   }
 
-  function updateSubScore(subCriterionId: string, value: string, minScore: number, maxScore: number) {
+  function updateSubScore(subCriterionId: string, value: string, minScore: number, maxScore: number, allowNegativeScore: boolean) {
     setSubScoreMap((current) => ({
       ...current,
-      [subCriterionId]: normalizeScoreInput(value, minScore, maxScore),
+      [subCriterionId]: normalizeScoreInput(value, minScore, maxScore, allowNegativeScore),
     }));
   }
 
@@ -278,7 +283,7 @@ export function ScoringForm({
         comment: criterionCommentMap[criterion.id] ?? "",
         subItems: criterion.subCriteria.map((subCriterion) => ({
           subCriterionId: subCriterion.id,
-          numericScore: getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore),
+          numericScore: getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore, criterion.allowNegativeScore),
           comment: subCriterionCommentMap[subCriterion.id] ?? "",
         })),
       })),
@@ -408,7 +413,7 @@ export function ScoringForm({
                                 criterion.subCriteria.map((item) => item.weight),
                               )}
                             >
-                              {formatScoreRange(subCriterion)} | {subCriterion.weight}%
+                              {formatScoreRange({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore })} | {subCriterion.weight}%
                             </div>
                           </div>
                           {subCriterion.description ? (
@@ -420,18 +425,22 @@ export function ScoringForm({
                         </div>
                         <input
                           type="text"
-                          inputMode={getEffectiveScoreRange(subCriterion).minScore < 0 ? "text" : "decimal"}
+                          inputMode={getEffectiveScoreRange({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore }).minScore < 0 ? "text" : "decimal"}
                           pattern="-?[0-9.]*"
-                          min={getEffectiveScoreRange(subCriterion).minScore}
+                          min={getEffectiveScoreRange({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore }).minScore}
                           max={subCriterion.maxScore}
                           value={subScoreMap[subCriterion.id] ?? subCriterion.minScore}
                           disabled={locked || pending}
                           onFocus={selectZeroOnFocus}
-                          onChange={(event) => updateSubScore(subCriterion.id, event.target.value, subCriterion.minScore, subCriterion.maxScore)}
+                          onChange={(event) => updateSubScore(subCriterion.id, event.target.value, subCriterion.minScore, subCriterion.maxScore, criterion.allowNegativeScore)}
                           className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                         />
                         <div className="rounded-xl bg-white px-3 py-3 text-sm text-slate-600">
-                          {t.weightedPrefix} {getScoreContribution(subCriterion, getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore)).toFixed(2)}
+                          {t.weightedPrefix}{" "}
+                          {getScoreContribution(
+                            { ...subCriterion, allowNegativeScore: criterion.allowNegativeScore },
+                            getNumericInputValue(subScoreMap[subCriterion.id], subCriterion.minScore, subCriterion.maxScore, criterion.allowNegativeScore),
+                          ).toFixed(2)}
                         </div>
                         <Textarea
                           value={subCriterionCommentMap[subCriterion.id] ?? ""}
@@ -455,7 +464,7 @@ export function ScoringForm({
                     value={scoreMap[criterion.id] ?? criterion.minScore}
                     disabled={locked || pending}
                     onFocus={selectZeroOnFocus}
-                    onChange={(event) => updateScore(criterion.id, event.target.value, criterion.minScore, criterion.maxScore)}
+                    onChange={(event) => updateScore(criterion.id, event.target.value, criterion.minScore, criterion.maxScore, criterion.allowNegativeScore)}
                     className="h-11 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-950 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   />
                   <div className="rounded-xl bg-slate-100 px-3 py-3 text-sm text-slate-600">

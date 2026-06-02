@@ -50,15 +50,18 @@ function round(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
-function getScoreContribution(score: number, minScore: number, maxScore: number, weight: number) {
-  const effectiveMinScore = Math.min(minScore, maxScore > 0 ? -Math.abs(maxScore) : minScore);
-  const scale = Math.max(Math.abs(effectiveMinScore), Math.abs(maxScore));
+function getScoreContribution(score: number, minScore: number, maxScore: number, allowNegativeScore: boolean, weight: number) {
+  const effectiveMinScore = allowNegativeScore
+    ? Math.min(minScore, maxScore > 0 ? -Math.abs(maxScore) : minScore)
+    : Math.max(minScore, 0);
+  const effectiveMaxScore = allowNegativeScore ? maxScore : Math.max(maxScore, 0);
+  const scale = Math.max(Math.abs(effectiveMinScore), Math.abs(effectiveMaxScore));
 
   if (scale <= 0 || !Number.isFinite(weight)) {
     return 0;
   }
 
-  return round((Math.min(Math.max(score, effectiveMinScore), maxScore) / scale) * weight);
+  return round((Math.min(Math.max(score, effectiveMinScore), effectiveMaxScore) / scale) * weight);
 }
 
 async function main() {
@@ -216,6 +219,7 @@ async function main() {
       id: string;
       minScore: number;
       maxScore: number;
+      allowNegativeScore: boolean;
       weight: number;
     }>
   >();
@@ -231,6 +235,7 @@ async function main() {
             id: true,
             minScore: true,
             maxScore: true,
+            allowNegativeScore: true,
             weight: true,
           },
         }),
@@ -382,6 +387,7 @@ async function main() {
             value,
             categoryRule[index]?.minScore ?? 0,
             categoryRule[index]?.maxScore ?? 100,
+            categoryRule[index]?.allowNegativeScore ?? false,
             categoryRule[index]?.weight ?? 0,
           ),
         0,
@@ -403,7 +409,13 @@ async function main() {
           create: categoryRule.map((criterion, index) => ({
             criterionId: criterion.id,
             numericScore: input.scores[index] ?? 0,
-            weightedValue: getScoreContribution(input.scores[index] ?? 0, criterion.minScore, criterion.maxScore, criterion.weight),
+            weightedValue: getScoreContribution(
+              input.scores[index] ?? 0,
+              criterion.minScore,
+              criterion.maxScore,
+              criterion.allowNegativeScore,
+              criterion.weight,
+            ),
           })),
         },
         audits: {

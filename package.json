@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "npm run db:setup",
     "db:seed": "tsx prisma/seed.ts",
+    "db:migrate:negative-score-toggle": "tsx scripts/migrate-negative-score-toggle.ts",
     "scores:recalculate": "tsx scripts/recalculate-scores.ts",
     "db:setup": "node -e \"const fs=require('fs'); try { fs.rmSync('prisma/dev.db', { force: true }); } catch {}\" && npx prisma db execute --file prisma/init.sql --schema prisma/schema.prisma && npm run db:generate && npm run db:seed"
   },

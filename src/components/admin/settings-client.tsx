@@ -30,6 +30,7 @@ import { FeedbackMessage, RequiredMark } from "@/components/shared/form-feedback
 import { Input } from "@/components/shared/input";
 import { Textarea } from "@/components/shared/textarea";
 import { DataTable, Table, TBody, TD, TH, THead } from "@/components/shared/table";
+import { getEffectiveScoreRange } from "@/lib/scoring";
 
 type SettingsValue = {
   competitionId: string | null;
@@ -83,6 +84,7 @@ type Criterion = {
   description: string | null;
   minScore: number;
   maxScore: number;
+  allowNegativeScore: boolean;
   weight: number;
   displayOrder: number;
   active: boolean;
@@ -125,6 +127,12 @@ function getWeightTotalClassName(totalWeight: number) {
   }
 
   return "text-emerald-700";
+}
+
+function formatCriterionRange(criterion: { minScore: number; maxScore: number; allowNegativeScore: boolean }) {
+  const range = getEffectiveScoreRange(criterion);
+
+  return `${range.minScore} - ${range.maxScore}`;
 }
 
 export function SettingsClient({
@@ -178,6 +186,7 @@ export function SettingsClient({
     description: "",
     minScore: 0,
     maxScore: 100,
+    allowNegativeScore: false,
     weight: 0,
     displayOrder: criteria.length + 1,
     active: true,
@@ -293,6 +302,7 @@ export function SettingsClient({
       description: "",
       minScore: 0,
       maxScore: 100,
+      allowNegativeScore: false,
       weight: 0,
       displayOrder: 1,
       active: true,
@@ -463,6 +473,7 @@ export function SettingsClient({
         description: "",
         minScore: 0,
         maxScore: 100,
+        allowNegativeScore: false,
         weight: 0,
         displayOrder: criteria.filter((item) => item.categoryId === criterionForm.categoryId).length + 1,
         active: true,
@@ -569,6 +580,7 @@ export function SettingsClient({
       description: item.description ?? "",
       minScore: item.minScore,
       maxScore: item.maxScore,
+      allowNegativeScore: item.allowNegativeScore,
       weight: item.weight,
       displayOrder: item.displayOrder,
       active: item.active,
@@ -1101,7 +1113,7 @@ export function SettingsClient({
                         ) : null}
                       </TD>
                       <TD>
-                        {item.minScore} - {item.maxScore}
+                        {formatCriterionRange(item)}
                       </TD>
                       <TD>{item.weight}%</TD>
                       <TD>{item.displayOrder}</TD>
@@ -1160,6 +1172,13 @@ export function SettingsClient({
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">{t.weight} (%)</label>
                 <Input type="number" step="0.01" min={0} max={100} value={criterionForm.weight} onChange={(event) => setCriterionForm((current) => ({ ...current, weight: Number(event.target.value) }))} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-slate-700">{t.allowNegativeScore}</label>
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={criterionForm.allowNegativeScore} onChange={(event) => setCriterionForm((current) => ({ ...current, allowNegativeScore: event.target.checked }))} />
+                  {t.allowNegativeScoreDesc}
+                </label>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium text-slate-700">{t.statusLabel}</label>

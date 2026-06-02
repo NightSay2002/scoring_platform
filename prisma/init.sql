@@ -99,6 +99,7 @@ CREATE TABLE "Criterion" (
     "description" TEXT,
     "minScore" REAL NOT NULL,
     "maxScore" REAL NOT NULL,
+    "allowNegativeScore" BOOLEAN NOT NULL DEFAULT false,
     "weight" REAL NOT NULL DEFAULT 0,
     "displayOrder" INTEGER NOT NULL DEFAULT 0,
     "active" BOOLEAN NOT NULL DEFAULT true,

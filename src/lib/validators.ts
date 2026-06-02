@@ -68,6 +68,7 @@ export const criterionSchema = z.object({
   description: z.string().optional(),
   minScore: z.coerce.number().finite(),
   maxScore: z.coerce.number().finite(),
+  allowNegativeScore: z.boolean().default(false),
   weight: z.coerce.number().min(0).max(100),
   displayOrder: z.coerce.number().int().nonnegative(),
   active: z.boolean().default(true),

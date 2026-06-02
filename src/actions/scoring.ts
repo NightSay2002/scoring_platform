@@ -32,13 +32,13 @@ const scorePayloadSchema = z.object({
 });
 
 function getScaledCriterionScore(
-  criterion: { maxScore: number },
+  criterion: { maxScore: number; allowNegativeScore: boolean },
   subCriteria: Array<{ id: string; maxScore: number; weight: number }>,
   subItems: Array<{ subCriterionId: string; numericScore: number; weightedValue: number }>,
 ) {
   const weightedSubScore = subItems.reduce((sum, subItem) => sum + subItem.weightedValue, 0);
   const weightedSubMax = subCriteria.reduce(
-    (sum, subCriterion) => sum + getScoreContribution(subCriterion, subCriterion.maxScore),
+    (sum, subCriterion) => sum + getScoreContribution({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore }, subCriterion.maxScore),
     0,
   );
 
@@ -196,7 +196,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
           return { error: "One or more sub-criteria are invalid." };
         }
 
-        const subCriterionRange = getEffectiveScoreRange(subCriterion);
+        const subCriterionRange = getEffectiveScoreRange({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore });
         if (subItem.numericScore < subCriterionRange.minScore || subItem.numericScore > subCriterionRange.maxScore) {
           return {
             error: `${subCriterion.name} must be between ${subCriterionRange.minScore} and ${subCriterionRange.maxScore}.`,
@@ -206,7 +206,7 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
         normalizedSubItems.push({
           subCriterionId: subCriterion.id,
           numericScore: subItem.numericScore,
-          weightedValue: getScoreContribution(subCriterion, subItem.numericScore),
+          weightedValue: getScoreContribution({ ...subCriterion, allowNegativeScore: criterion.allowNegativeScore }, subItem.numericScore),
           comment: subItem.comment.trim(),
         });
       }

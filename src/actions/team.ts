@@ -420,6 +420,7 @@ export async function upsertCriterionAction(payload: {
   description?: string;
   minScore: number;
   maxScore: number;
+  allowNegativeScore?: boolean;
   weight: number;
   displayOrder: number;
   active: boolean;
@@ -484,8 +485,9 @@ export async function upsertCriterionAction(payload: {
         categoryId: parsed.data.categoryId,
         name: parsed.data.name.trim(),
         description: parsed.data.description?.trim() || null,
-        minScore: parsed.data.minScore,
+        minScore: parsed.data.allowNegativeScore ? parsed.data.minScore : Math.max(parsed.data.minScore, 0),
         maxScore: parsed.data.maxScore,
+        allowNegativeScore: parsed.data.allowNegativeScore,
         weight: parsed.data.weight,
         displayOrder: parsed.data.displayOrder,
         active: parsed.data.active,
@@ -621,7 +623,7 @@ export async function upsertCriterionSubItemAction(payload: {
     prisma.$transaction(async (tx) => {
       const criterion = await tx.criterion.findUnique({
         where: { id: parsed.data.criterionId },
-        select: { id: true },
+        select: { id: true, allowNegativeScore: true },
       });
 
       if (!criterion) {
@@ -665,7 +667,7 @@ export async function upsertCriterionSubItemAction(payload: {
         criterionId: parsed.data.criterionId,
         name: parsed.data.name.trim(),
         description: parsed.data.description?.trim() || null,
-        minScore: parsed.data.minScore,
+        minScore: criterion.allowNegativeScore ? parsed.data.minScore : Math.max(parsed.data.minScore, 0),
         maxScore: parsed.data.maxScore,
         weight: parsed.data.weight,
         displayOrder: parsed.data.displayOrder,
