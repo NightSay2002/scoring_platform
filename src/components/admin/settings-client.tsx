@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   addCompetitionImageAction,
@@ -15,6 +15,7 @@ import {
   deleteUserAccountAction,
   reorderCriterionAction,
   reorderCriterionSubItemAction,
+  resetJudgeScoresAction,
   updateSettingsAction,
   updateCompetitionAction,
   upsertCategoryAction,
@@ -358,6 +359,19 @@ export function SettingsClient({
         setSettingsUpdatedAt(result.settingsUpdatedAt ?? "");
       }
       setMessage(t.settingsUpdated);
+    });
+  }
+
+  function resetJudgeScores() {
+    if (!window.confirm(t.confirmResetJudgeScores)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await resetJudgeScoresAction();
+
+      setMessage(t.judgeScoresReset.replace("{count}", String(result?.scores ?? 0)));
+      router.refresh();
     });
   }
 
@@ -981,6 +995,22 @@ export function SettingsClient({
           <div className="flex justify-end">
             <Button onClick={saveSettings} disabled={pending || !settingsForm.competitionId}>
               {pending ? t.saving : t.saveSettings}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader title={t.dataManagementTitle} description={t.dataManagementDesc} />
+        <CardContent>
+          <div className="flex flex-col gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-rose-950">{t.resetJudgeScoresTitle}</p>
+              <p className="text-sm text-rose-700">{t.resetJudgeScoresDesc}</p>
+            </div>
+            <Button variant="danger" onClick={resetJudgeScores} disabled={pending} className="gap-2 sm:shrink-0">
+              <RotateCcw className="h-4 w-4" />
+              {pending ? t.saving : t.resetJudgeScores}
             </Button>
           </div>
         </CardContent>

@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { deleteJudgeScoreRecords } from "@/lib/reset-judge-scores";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
 import { normalizeDocumentLinks, serializeDocumentLinks, type DocumentLink } from "@/lib/utils";
 import {
@@ -931,6 +932,18 @@ export async function updateSettingsAction(payload: {
 
   revalidateAppData();
   return { success: true, settingsUpdatedAt: updatedSettings.updatedAt.toISOString() };
+}
+
+export async function resetJudgeScoresAction() {
+  await requireAdmin();
+
+  const result = await withSqliteWriteRetry(() =>
+    prisma.$transaction((tx) => deleteJudgeScoreRecords(tx)),
+  );
+
+  revalidateAppData();
+  revalidatePath("/team/results");
+  return { success: true, ...result };
 }
 
 export async function toggleCompetitionScoringAction(resume: boolean, competitionId?: string, expectedCompetitionUpdatedAt?: string) {
