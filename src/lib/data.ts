@@ -283,7 +283,7 @@ export async function getAdminDashboardData() {
   const settings = await prisma.settings.findUnique({ where: { id: "default" } });
   const activeCompetitionId = getActiveCompetitionId(settings);
 
-  const [teams, judges, scoringStatuses, recentAudits] = await Promise.all([
+  const [teams, judges, scoringStatuses] = await Promise.all([
     prisma.team.findMany({
       where: activeCompetitionId
         ? {
@@ -333,33 +333,6 @@ export async function getAdminDashboardData() {
           select: { competitionId: true, userId: true, canScore: true },
         })
       : Promise.resolve([]),
-    prisma.scoreAudit.findMany({
-      where: activeCompetitionId
-        ? {
-            score: {
-              team: {
-                category: {
-                  competitionId: activeCompetitionId,
-                },
-              },
-            },
-          }
-        : undefined,
-      include: {
-        actor: true,
-        score: {
-          include: {
-            team: {
-              include: {
-                category: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    }),
   ]);
 
   const approvedTeams = getApprovedTeams(teams);
@@ -407,18 +380,52 @@ export async function getAdminDashboardData() {
       { label: "Submitted scores", value: `${submittedScores}/${expectedScores}`, help: "Completed scoring records" },
     ],
     leaderboard: rankedRows,
-    recentAudits: recentAudits.map((audit) => ({
-      id: audit.id,
-      action: audit.action,
-      actor: audit.actor.name,
-      team: audit.score.team.teamName,
-      category: audit.score.team.category?.name ?? "Uncategorized",
-      createdAt: audit.createdAt,
-    })),
     judgeProgress: judgeProgress.filter(
       (judge) => judge.assignedTeams || judge.draftCount || judge.submittedCount || judge.pendingCount,
     ),
   };
+}
+
+export async function getRecentAdminActivityData() {
+  const settings = await prisma.settings.findUnique({ where: { id: "default" } });
+  const activeCompetitionId = getActiveCompetitionId(settings);
+
+  const recentAudits = await prisma.scoreAudit.findMany({
+    where: activeCompetitionId
+      ? {
+          score: {
+            team: {
+              category: {
+                competitionId: activeCompetitionId,
+              },
+            },
+          },
+        }
+      : undefined,
+    include: {
+      actor: true,
+      score: {
+        include: {
+          team: {
+            include: {
+              category: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+  });
+
+  return recentAudits.map((audit) => ({
+    id: audit.id,
+    action: audit.action,
+    actor: audit.actor.name,
+    team: audit.score.team.teamName,
+    category: audit.score.team.category?.name ?? "Uncategorized",
+    createdAt: audit.createdAt.toISOString(),
+  }));
 }
 
 export async function getTeamsManagementData() {

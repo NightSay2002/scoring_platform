@@ -62,6 +62,8 @@ export const dictionaries = {
     header: {
       signedInAs: "Signed in as",
       signOut: "Sign out",
+      openRecentActivity: "Open recent activity",
+      closeRecentActivity: "Close recent activity",
       role: {
         ADMIN: "Admin",
         CHIEF_JUDGE: "Chief Judge",
@@ -640,6 +642,8 @@ export const dictionaries = {
     header: {
       signedInAs: "目前登入",
       signOut: "登出",
+      openRecentActivity: "開啟近期活動",
+      closeRecentActivity: "關閉近期活動",
       role: {
         ADMIN: "管理員",
         CHIEF_JUDGE: "Chief Judge",
