@@ -1318,13 +1318,21 @@ export async function getExportData(competitionId?: string) {
         },
         judge: true,
       },
-      orderBy: [{ team: { teamCode: "asc" } }, { judge: { name: "asc" } }],
+      orderBy: [{ judge: { name: "asc" } }],
     }),
   ]);
 
   return {
     leaderboard: leaderboard.overallRows,
-    comments,
+    comments: comments.slice().sort((left, right) => {
+      const sequenceCompare = compareTeamCode(left.team, right.team);
+
+      if (sequenceCompare !== 0) {
+        return sequenceCompare;
+      }
+
+      return left.judge.name.localeCompare(right.judge.name, "en", { sensitivity: "base" });
+    }),
   };
 }
 
