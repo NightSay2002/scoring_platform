@@ -261,7 +261,7 @@ async function main() {
   const teams = await Promise.all([
     prisma.team.create({
       data: {
-        teamCode: "T-001",
+        teamCode: "0",
         teamName: "Circuit Breakers",
         categoryId: categoryAi.id,
         ownerUserId: teamUser1.id,
@@ -279,7 +279,7 @@ async function main() {
     }),
     prisma.team.create({
       data: {
-        teamCode: "T-002",
+        teamCode: "1",
         teamName: "Signal Foundry",
         categoryId: categorySustainability.id,
         ownerUserId: teamUser2.id,
@@ -297,7 +297,7 @@ async function main() {
     }),
     prisma.team.create({
       data: {
-        teamCode: "T-003",
+        teamCode: "2",
         teamName: "Data Harbor",
         categoryId: categorySustainability.id,
         ownerUserId: teamUser3.id,
@@ -315,7 +315,7 @@ async function main() {
     }),
     prisma.team.create({
       data: {
-        teamCode: "T-004",
+        teamCode: "3",
         teamName: "Byte Mechanics",
         categoryId: categoryRobotics.id,
         ownerUserId: teamUser4.id,
@@ -333,7 +333,7 @@ async function main() {
     }),
     prisma.team.create({
       data: {
-        teamCode: "T-005",
+        teamCode: "4",
         teamName: "NovaForge",
         categoryId: categoryAi.id,
         ownerUserId: teamUser5.id,

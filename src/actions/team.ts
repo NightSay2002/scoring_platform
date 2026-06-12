@@ -156,7 +156,7 @@ async function generateNextTeamCode(tx: Prisma.TransactionClient) {
   const maxNumericCode = teams.reduce((max, team) => {
     const value = Number.parseInt(team.teamCode, 10);
     return Number.isNaN(value) ? max : Math.max(max, value);
-  }, 0);
+  }, -1);
   let nextCode = String(maxNumericCode + 1);
 
   while (usedCodes.has(nextCode)) {
@@ -388,7 +388,7 @@ export async function reorderTeamSequenceAction(teamId: string, targetTeamId: st
         reordered.map((item, index) =>
           tx.team.update({
             where: { id: item.id },
-            data: { teamCode: `__seq_${index + 1}_${item.id}` },
+            data: { teamCode: `__seq_${index}_${item.id}` },
           }),
         ),
       );
@@ -397,7 +397,7 @@ export async function reorderTeamSequenceAction(teamId: string, targetTeamId: st
         reordered.map((item, index) =>
           tx.team.update({
             where: { id: item.id },
-            data: { teamCode: String(index + 1) },
+            data: { teamCode: String(index) },
           }),
         ),
       );
