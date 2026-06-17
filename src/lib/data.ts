@@ -41,6 +41,32 @@ const teamInclude = {
 type TeamWithRelations = Prisma.TeamGetPayload<{ include: typeof teamInclude }>;
 type ScoringParticipant = { id: string; name: string; role: Role; canScore: boolean };
 type CompetitionScorerStatus = { competitionId: string; userId: string; canScore: boolean };
+type DetailedResultExportRow = {
+  rank: number | string;
+  categoryName: string;
+  sequence: string;
+  teamName: string;
+  projectTitle: string;
+  teamAverageScore: number;
+  submittedCount: number;
+  expectedCount: number;
+  pendingJudges: string;
+  judgeName: string;
+  judgeRole: Role;
+  judgeExpected: string;
+  judgeStatus: ScoreStatus | "PENDING";
+  judgeTotalScore: number | string;
+  judgeComment: string;
+  judgeUpdatedAt: string;
+  itemLevel: string;
+  criterionName: string;
+  subCriterionName: string;
+  range: string;
+  weight: number | string;
+  rawScore: number | string;
+  contributionScore: number | string;
+  itemComment: string;
+};
 
 const teamCodeCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
@@ -1296,9 +1322,9 @@ export async function getTeamPortalData(userId: string, requestedCompetitionId?:
 }
 
 export async function getExportData(competitionId?: string) {
-  const { selectedCompetitionId } = await resolveCompetitionScope(competitionId);
+  const { settings, selectedCompetitionId } = await resolveCompetitionScope(competitionId);
 
-  const [leaderboard, comments] = await Promise.all([
+  const [leaderboard, comments, teams, judges, scoringStatuses, criteria] = await Promise.all([
     getLeaderboardData(selectedCompetitionId ?? undefined),
     prisma.score.findMany({
       where: selectedCompetitionId
@@ -1320,7 +1346,174 @@ export async function getExportData(competitionId?: string) {
       },
       orderBy: [{ judge: { name: "asc" } }],
     }),
+    prisma.team.findMany({
+      where: selectedCompetitionId
+        ? {
+            category: {
+              competitionId: selectedCompetitionId,
+            },
+          }
+        : undefined,
+      include: teamInclude,
+      orderBy: { teamCode: "asc" },
+    }),
+    prisma.user.findMany({
+      where: scoringParticipantWhere,
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    selectedCompetitionId
+      ? prisma.competitionScorer.findMany({
+          where: { competitionId: selectedCompetitionId },
+          select: { competitionId: true, userId: true, canScore: true },
+        })
+      : Promise.resolve([]),
+    prisma.criterion.findMany({
+      where: {
+        active: true,
+        ...(selectedCompetitionId
+          ? {
+              category: {
+                competitionId: selectedCompetitionId,
+              },
+            }
+          : {}),
+      },
+      include: {
+        subCriteria: {
+          where: { active: true },
+          orderBy: { displayOrder: "asc" },
+        },
+      },
+      orderBy: [{ categoryId: "asc" }, { displayOrder: "asc" }],
+    }),
   ]);
+  const leaderboardByTeamId = new Map(leaderboard.overallRows.map((row) => [row.id, row]));
+  const criteriaByCategoryId = new Map<string, typeof criteria>();
+
+  for (const criterion of criteria) {
+    const categoryCriteria = criteriaByCategoryId.get(criterion.categoryId) ?? [];
+    categoryCriteria.push(criterion);
+    criteriaByCategoryId.set(criterion.categoryId, categoryCriteria);
+  }
+
+  const detailedResults: DetailedResultExportRow[] = getApprovedTeams(teams)
+    .slice()
+    .sort(compareTeamCode)
+    .flatMap((team) => {
+      const leaderboardRow = leaderboardByTeamId.get(team.id);
+      const teamCriteria = team.categoryId ? criteriaByCategoryId.get(team.categoryId) ?? [] : [];
+      const competitionParticipants = getCompetitionScoringParticipants(judges, scoringStatuses, team.category?.competitionId);
+      const enabledParticipants = competitionParticipants.filter((participant) => participant.canScore);
+      const expectedJudgeIds = getAllVisibleJudgeIds(settings, team, enabledParticipants);
+      const expectedJudgeIdSet = new Set(expectedJudgeIds);
+      const scoreByJudgeId = new Map(team.scores.map((score) => [score.judgeId, score]));
+      const participantById = new Map(enabledParticipants.map((participant) => [participant.id, participant]));
+
+      for (const score of team.scores) {
+        if (!participantById.has(score.judgeId)) {
+          participantById.set(score.judgeId, {
+            id: score.judgeId,
+            name: score.judge.name,
+            role: score.judge.role,
+            canScore: true,
+          });
+        }
+      }
+
+      return Array.from(participantById.values())
+        .sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base" }))
+        .flatMap((participant): DetailedResultExportRow[] => {
+          const score = scoreByJudgeId.get(participant.id);
+          const scoreItemsByCriterionId = new Map(score?.items.map((item) => [item.criterionId, item]) ?? []);
+          const criteriaById = new Map(teamCriteria.map((criterion) => [criterion.id, criterion]));
+
+          for (const item of score?.items ?? []) {
+            if (!criteriaById.has(item.criterionId)) {
+              criteriaById.set(item.criterionId, item.criterion);
+            }
+          }
+
+          const criteriaForRows = Array.from(criteriaById.values()).sort((left, right) => left.displayOrder - right.displayOrder);
+          const baseRow = {
+            rank: leaderboardRow?.rank ?? "",
+            categoryName: team.category?.name ?? "Uncategorized",
+            sequence: team.teamCode,
+            teamName: team.teamName,
+            projectTitle: team.projectTitle,
+            teamAverageScore: leaderboardRow?.averageScore ?? 0,
+            submittedCount: leaderboardRow?.submittedCount ?? 0,
+            expectedCount: leaderboardRow?.expectedCount ?? expectedJudgeIds.length,
+            pendingJudges: leaderboardRow?.pendingJudgeNames.join("; ") ?? "",
+            judgeName: participant.name,
+            judgeRole: participant.role,
+            judgeExpected: expectedJudgeIdSet.has(participant.id) ? "Yes" : "No",
+            judgeStatus: (score?.status ?? "PENDING") as ScoreStatus | "PENDING",
+            judgeTotalScore: score?.weightedScore ?? "",
+            judgeComment: score?.comment ?? "",
+            judgeUpdatedAt: score?.updatedAt.toISOString() ?? "",
+          };
+
+          if (!criteriaForRows.length) {
+            return [
+              {
+                ...baseRow,
+                itemLevel: "",
+                criterionName: "",
+                subCriterionName: "",
+                range: "",
+                weight: "",
+                rawScore: "",
+                contributionScore: "",
+                itemComment: "",
+              },
+            ];
+          }
+
+          return criteriaForRows.flatMap((criterion): DetailedResultExportRow[] => {
+            const scoreItem = scoreItemsByCriterionId.get(criterion.id);
+            const subItemsBySubCriterionId = new Map(scoreItem?.subItems.map((subItem) => [subItem.subCriterionId, subItem]) ?? []);
+            const subCriteriaById = new Map(criterion.subCriteria.map((subCriterion) => [subCriterion.id, subCriterion]));
+
+            for (const subItem of scoreItem?.subItems ?? []) {
+              if (!subCriteriaById.has(subItem.subCriterionId)) {
+                subCriteriaById.set(subItem.subCriterionId, subItem.subCriterion);
+              }
+            }
+
+            return [
+              {
+                ...baseRow,
+                itemLevel: "Parent",
+                criterionName: criterion.name,
+                subCriterionName: "",
+                range: `${criterion.minScore} - ${criterion.maxScore}`,
+                weight: criterion.weight,
+                rawScore: scoreItem?.numericScore ?? "",
+                contributionScore: scoreItem?.weightedValue ?? "",
+                itemComment: scoreItem?.comment ?? "",
+              },
+              ...Array.from(subCriteriaById.values())
+                .sort((left, right) => left.displayOrder - right.displayOrder)
+                .map((subCriterion) => {
+                  const subItem = subItemsBySubCriterionId.get(subCriterion.id);
+
+                  return {
+                    ...baseRow,
+                    itemLevel: "Sub",
+                    criterionName: criterion.name,
+                    subCriterionName: subCriterion.name,
+                    range: `${subCriterion.minScore} - ${subCriterion.maxScore}`,
+                    weight: subCriterion.weight,
+                    rawScore: subItem?.numericScore ?? "",
+                    contributionScore: subItem?.weightedValue ?? "",
+                    itemComment: subItem?.comment ?? "",
+                  };
+                }),
+            ];
+          });
+        });
+    });
 
   return {
     leaderboard: leaderboard.overallRows,
@@ -1333,6 +1526,7 @@ export async function getExportData(competitionId?: string) {
 
       return left.judge.name.localeCompare(right.judge.name, "en", { sensitivity: "base" });
     }),
+    detailedResults,
   };
 }
 

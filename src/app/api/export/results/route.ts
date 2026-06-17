@@ -13,30 +13,60 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const competitionId = url.searchParams.get("competitionId") ?? undefined;
-  const { leaderboard } = await getExportData(competitionId);
+  const { detailedResults } = await getExportData(competitionId);
   const header = [
     "Rank",
     "AWARD Category",
     "Sequence",
     "Team Name",
     "Project Title",
-    "Average Score",
+    "Team Average Score",
     "Submitted Count",
     "Expected Count",
     "Pending Judges",
+    "Judge",
+    "Judge Role",
+    "Judge Expected",
+    "Judge Status",
+    "Judge Total Score",
+    "Judge Overall Comment",
+    "Judge Updated At",
+    "Item Level",
+    "Criterion",
+    "Sub-Criterion",
+    "Range",
+    "Weight",
+    "Raw Score",
+    "Contribution Score",
+    "Item Comment",
   ];
 
-  const rows = leaderboard.map((row) =>
+  const rows = detailedResults.map((row) =>
     [
       row.rank,
       row.categoryName,
-      row.teamCode,
+      row.sequence,
       row.teamName,
       row.projectTitle,
-      row.averageScore,
+      row.teamAverageScore,
       row.submittedCount,
       row.expectedCount,
-      row.pendingJudgeNames.join("; "),
+      row.pendingJudges,
+      row.judgeName,
+      row.judgeRole,
+      row.judgeExpected,
+      row.judgeStatus,
+      row.judgeTotalScore,
+      row.judgeComment,
+      row.judgeUpdatedAt,
+      row.itemLevel,
+      row.criterionName,
+      row.subCriterionName,
+      row.range,
+      row.weight,
+      row.rawScore,
+      row.contributionScore,
+      row.itemComment,
     ]
       .map(csvEscape)
       .join(","),
