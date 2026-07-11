@@ -12,7 +12,9 @@ import { prisma } from "@/lib/prisma";
 import { deleteJudgeScoreRecords } from "@/lib/reset-judge-scores";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
 import { normalizeDocumentLinks, serializeDocumentLinks, type DocumentLink } from "@/lib/utils";
+import { serializeTeamLocations, type NominationType, type TeamLocation } from "@/lib/team-fields";
 import {
+  adminTeamSchema,
   competitionSchema,
   categorySchema,
   criterionSchema,
@@ -185,6 +187,23 @@ function buildTeamData(parsed: ReturnType<typeof teamSchema.parse>) {
   };
 }
 
+function buildAdminTeamData(parsed: ReturnType<typeof adminTeamSchema.parse>) {
+  return {
+    ...buildTeamData(parsed),
+    teamCode: parsed.teamCode.trim(),
+    projectTitle: parsed.projectTitle.trim(),
+    organization: parsed.organization.trim(),
+    nominationType: parsed.nominationType,
+    locations: serializeTeamLocations(parsed.locations),
+    supportingEvidenceSubmitted: parsed.supportingEvidenceSubmitted,
+    videoSubmitted: parsed.videoSubmitted,
+    applicationFormUrl: parsed.applicationFormUrl.trim(),
+    applicationFormName: parsed.applicationFormName.trim(),
+    relevantUrls: parsed.relevantUrls?.trim() || null,
+    note: parsed.note?.trim() || null,
+  };
+}
+
 async function validateCategoryCompetition(categoryId: string, competitionId: string) {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
@@ -232,14 +251,22 @@ async function validateOpenCompetition(competitionId: string) {
 
 export async function upsertTeamAction(payload: {
   id?: string;
-  teamCode?: string;
+  teamCode: string;
   teamName: string;
   competitionId: string;
   categoryId: string;
   projectTitle: string;
   projectDescription: string;
-  organization?: string;
+  organization: string;
   teamMembers: string;
+  nominationType: NominationType;
+  locations: TeamLocation[];
+  supportingEvidenceSubmitted: boolean;
+  videoSubmitted: boolean;
+  applicationFormUrl: string;
+  applicationFormName: string;
+  relevantUrls?: string;
+  note?: string;
   videoUrl?: string;
   imageUrl?: string;
   documentUrl?: string;
@@ -252,7 +279,7 @@ export async function upsertTeamAction(payload: {
 }) {
   await requireAdmin();
 
-  const parsed = teamSchema.safeParse(payload);
+  const parsed = adminTeamSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid team data." };
   }
@@ -277,7 +304,7 @@ export async function upsertTeamAction(payload: {
     }
   }
 
-  const data = buildTeamData(parsed.data);
+  const data = buildAdminTeamData(parsed.data);
 
   try {
     await withSqliteWriteRetry(() =>
@@ -309,7 +336,6 @@ export async function upsertTeamAction(payload: {
           await tx.team.create({
             data: {
               ...data,
-              teamCode: await generateNextTeamCode(tx),
               ownerUserId,
               submissionStatus: parsed.data.submissionStatus ?? ApprovalStatus.DRAFT,
             },

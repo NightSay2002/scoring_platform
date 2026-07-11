@@ -2,13 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileText, GripVertical, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
+import { CheckCircle2, FileText, Image as ImageIcon, Link2, Pencil, Plus, ShieldCheck, Trash2, Upload, Video, XCircle } from "lucide-react";
 
 import {
   approveTeamSubmissionAction,
   deleteTeamAction,
   rejectTeamSubmissionAction,
-  reorderTeamSequenceAction,
   upsertTeamAction,
 } from "@/actions/team";
 import { useI18n } from "@/components/i18n/language-provider";
@@ -19,6 +18,7 @@ import { FeedbackMessage, RequiredMark } from "@/components/shared/form-feedback
 import { Input } from "@/components/shared/input";
 import { RelativeTime } from "@/components/shared/relative-time";
 import { Textarea } from "@/components/shared/textarea";
+import { locationOptions, type NominationType, type TeamLocation } from "@/lib/team-fields";
 import { DataTable, Table, TBody, TD, TH, THead } from "@/components/shared/table";
 
 type TeamRow = {
@@ -34,6 +34,14 @@ type TeamRow = {
   projectTitle: string;
   projectDescription: string;
   organization: string;
+  nominationType: NominationType;
+  locations: TeamLocation[];
+  supportingEvidenceSubmitted: boolean;
+  videoSubmitted: boolean;
+  applicationFormUrl: string;
+  applicationFormName: string;
+  relevantUrls: string;
+  note: string;
   teamMembers: string;
   videoUrl: string;
   imageUrl: string;
@@ -81,6 +89,14 @@ const emptyForm = {
   projectTitle: "",
   projectDescription: "",
   organization: "",
+  nominationType: "SELF" as NominationType,
+  locations: [] as TeamLocation[],
+  supportingEvidenceSubmitted: false,
+  videoSubmitted: false,
+  applicationFormUrl: "",
+  applicationFormName: "",
+  relevantUrls: "",
+  note: "",
   teamMembers: "",
   videoUrl: "",
   imageUrl: "",
@@ -124,8 +140,8 @@ export function TeamManagementClient({
   const [statusFilter, setStatusFilter] = useState("");
   const [message, setMessage] = useState<string>("");
   const [avatarFileName, setAvatarFileName] = useState("");
-  const [documentFileName, setDocumentFileName] = useState("");
-  const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
+  const [applicationFormFileName, setApplicationFormFileName] = useState("");
+  const [supportingEvidenceFileName, setSupportingEvidenceFileName] = useState("");
   const [pending, startTransition] = useTransition();
 
   const selectedTeam = teams.find((team) => team.id === selectedId);
@@ -144,7 +160,17 @@ export function TeamManagementClient({
     return teams.filter((team) => {
       const matchesQuery =
         !normalized ||
-        [team.teamCode, team.teamName, team.projectTitle, team.organization, team.competitionName, team.categoryName]
+        [
+          team.teamCode,
+          team.teamName,
+          team.projectTitle,
+          team.organization,
+          team.nominationType,
+          team.locations.join(" "),
+          team.relevantUrls,
+          team.competitionName,
+          team.categoryName,
+        ]
           .join(" ")
           .toLowerCase()
           .includes(normalized);
@@ -163,7 +189,8 @@ export function TeamManagementClient({
       competitionId: competitions[0]?.id ?? "",
     });
     setAvatarFileName("");
-    setDocumentFileName("");
+    setApplicationFormFileName("");
+    setSupportingEvidenceFileName("");
     setMessage("");
   }
 
@@ -179,6 +206,14 @@ export function TeamManagementClient({
       projectTitle: team.projectTitle,
       projectDescription: team.projectDescription,
       organization: team.organization,
+      nominationType: team.nominationType,
+      locations: team.locations,
+      supportingEvidenceSubmitted: team.supportingEvidenceSubmitted,
+      videoSubmitted: team.videoSubmitted,
+      applicationFormUrl: team.applicationFormUrl,
+      applicationFormName: team.applicationFormName,
+      relevantUrls: team.relevantUrls,
+      note: team.note,
       teamMembers: team.teamMembers,
       videoUrl: team.videoUrl,
       imageUrl: team.imageUrl,
@@ -189,7 +224,8 @@ export function TeamManagementClient({
       expectedUpdatedAt: team.updatedAt,
     });
     setAvatarFileName("");
-    setDocumentFileName(team.documentName);
+    setApplicationFormFileName(team.applicationFormName);
+    setSupportingEvidenceFileName(team.documentName);
     setMessage("");
   }
 
@@ -251,20 +287,22 @@ export function TeamManagementClient({
     });
   }
 
-  function handleUpload(kind: "avatar" | "document", file: File | null) {
+  function handleUpload(target: "avatar" | "applicationForm" | "supportingEvidence", file: File | null) {
     if (!file) {
       return;
     }
 
-    if (kind === "avatar") {
+    if (target === "avatar") {
       setAvatarFileName(file.name);
+    } else if (target === "applicationForm") {
+      setApplicationFormFileName(file.name);
     } else {
-      setDocumentFileName(file.name);
+      setSupportingEvidenceFileName(file.name);
     }
 
     startTransition(async () => {
       const formData = new FormData();
-      formData.set("kind", kind);
+      formData.set("kind", target === "avatar" ? "avatar" : "document");
       formData.set("file", file);
       const response = await fetch("/api/upload/team-asset", {
         method: "POST",
@@ -280,9 +318,11 @@ export function TeamManagementClient({
       const uploadedName = result.name ?? file.name;
       setForm((current) => ({
         ...current,
-        ...(kind === "avatar"
+        ...(target === "avatar"
           ? { imageUrl: uploadedUrl }
-          : syncDocumentFields([...current.documentLinks, { name: uploadedName, url: uploadedUrl }])),
+          : target === "applicationForm"
+            ? { applicationFormUrl: uploadedUrl, applicationFormName: uploadedName }
+            : syncDocumentFields([...current.documentLinks, { name: uploadedName, url: uploadedUrl }])),
       }));
       setMessage(t.uploaded);
     });
@@ -357,31 +397,6 @@ export function TeamManagementClient({
       }
 
       setMessage(t.teamRejected);
-      router.refresh();
-    });
-  }
-
-  function reorderTeam(sourceId: string | null, target: TeamRow) {
-    if (!sourceId || sourceId === target.id) {
-      setDraggingTeamId(null);
-      return;
-    }
-
-    const source = teams.find((team) => team.id === sourceId);
-    if (!source) {
-      setDraggingTeamId(null);
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await reorderTeamSequenceAction(source.id, target.id, source.updatedAt);
-      setDraggingTeamId(null);
-      if (result && "error" in result && result.error) {
-        setMessage("stale" in result && result.stale ? t.stalePageRefresh : result.error);
-        return;
-      }
-
-      setMessage(t.sequenceSaved);
       router.refresh();
     });
   }
@@ -477,22 +492,19 @@ export function TeamManagementClient({
                 {filteredTeams.map((team) => (
                   <tr
                     key={team.id}
-                    draggable={!pending}
-                    onDragStart={() => setDraggingTeamId(team.id)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => reorderTeam(draggingTeamId, team)}
-                    onDragEnd={() => setDraggingTeamId(null)}
-                    className={draggingTeamId === team.id ? "opacity-50" : ""}
                   >
                     <TD>
-                      <div className="flex items-center gap-2">
-                        <GripVertical className="h-4 w-4 cursor-move text-slate-400" aria-label={t.dragToReorder} />
-                        <span>{team.teamCode}</span>
-                      </div>
+                      <span>{team.teamCode}</span>
                     </TD>
                     <TD>
                       <div className="font-medium text-slate-950">{team.teamName}</div>
-                      <div className="text-xs text-slate-500">{team.projectTitle}</div>
+                      <div className="text-xs text-slate-500">
+                        {team.nominationType === "SELF" ? t.selfNomination : t.thirdPartyNomination}
+                        {team.projectTitle ? ` · ${team.projectTitle}` : ""}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {[team.organization, team.locations.join(", ")].filter(Boolean).join(" · ")}
+                      </div>
                     </TD>
                     <TD>
                       <div className="font-medium text-slate-950">{team.competitionName}</div>
@@ -518,6 +530,11 @@ export function TeamManagementClient({
                         ) : null}
                         {team.documentUrl ? (
                           <a href={team.documentUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-lg p-2 text-emerald-700">
+                            <FileText className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                        {team.applicationFormUrl ? (
+                          <a href={team.applicationFormUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-lg p-2 text-violet-700" aria-label={t.applicationFormUpload}>
                             <FileText className="h-4 w-4" />
                           </a>
                         ) : null}
@@ -555,13 +572,25 @@ export function TeamManagementClient({
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.teamCode}</label>
-              <Input value={selectedTeam ? form.teamCode : t.autoTeamCode} disabled />
+              <label className="text-sm font-medium text-slate-700">{t.teamCode}<RequiredMark /></label>
+              <Input value={form.teamCode} onChange={(event) => setForm((current) => ({ ...current, teamCode: event.target.value }))} placeholder={t.submissionIdPlaceholder} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.teamName}<RequiredMark /></label>
-              <Input value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} />
+              <Input aria-label={t.teamName} value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} />
             </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.nominationType}<RequiredMark /></label>
+            <select
+              aria-label={t.nominationType}
+              value={form.nominationType}
+              onChange={(event) => setForm((current) => ({ ...current, nominationType: event.target.value as NominationType }))}
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+            >
+              <option value="SELF">{t.selfNomination}</option>
+              <option value="THIRD_PARTY">{t.thirdPartyNomination}</option>
+            </select>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
@@ -595,8 +624,57 @@ export function TeamManagementClient({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{t.organization}</label>
+              <label className="text-sm font-medium text-slate-700">{t.organization}<RequiredMark /></label>
               <Input value={form.organization} onChange={(event) => setForm((current) => ({ ...current, organization: event.target.value }))} />
+            </div>
+          </div>
+          <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <legend className="px-1 text-sm font-medium text-slate-700">{t.locations}<RequiredMark /></legend>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+              {locationOptions.map((location) => (
+                <label key={location} className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.locations.includes(location)}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        locations: event.target.checked
+                          ? [...current.locations, location]
+                          : current.locations.filter((entry) => entry !== location),
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  {location}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{t.supportingEvidenceSubmitted}<RequiredMark /></label>
+              <select
+                aria-label={t.supportingEvidenceSubmitted}
+                value={form.supportingEvidenceSubmitted ? "yes" : "no"}
+                onChange={(event) => setForm((current) => ({ ...current, supportingEvidenceSubmitted: event.target.value === "yes" }))}
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                <option value="no">{t.no}</option>
+                <option value="yes">{t.yes}</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{t.videoSubmitted}<RequiredMark /></label>
+              <select
+                aria-label={t.videoSubmitted}
+                value={form.videoSubmitted ? "yes" : "no"}
+                onChange={(event) => setForm((current) => ({ ...current, videoSubmitted: event.target.value === "yes" }))}
+                className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                <option value="no">{t.no}</option>
+                <option value="yes">{t.yes}</option>
+              </select>
             </div>
           </div>
           <div className="space-y-2">
@@ -616,7 +694,7 @@ export function TeamManagementClient({
             <p className="text-xs text-slate-500">{t.ownerAccountHelp}</p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">{t.projectTitle}<RequiredMark /></label>
+            <label className="text-sm font-medium text-slate-700">{t.projectTitle}</label>
             <Input value={form.projectTitle} onChange={(event) => setForm((current) => ({ ...current, projectTitle: event.target.value }))} />
           </div>
           <div className="space-y-2">
@@ -645,7 +723,7 @@ export function TeamManagementClient({
               <Input value={form.imageUrl} onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))} />
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.avatarUpload}</label>
               <p className="text-xs text-slate-500">{t.avatarUploadHelp}</p>
@@ -657,15 +735,33 @@ export function TeamManagementClient({
               {avatarFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {avatarFileName}</p> : null}
               {form.imageUrl ? <p className="break-all text-xs text-slate-500">{form.imageUrl}</p> : null}
             </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{t.applicationFormUpload}<RequiredMark /></label>
+              <p className="text-xs text-slate-500">{t.applicationFormUploadHelp}</p>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                <Upload className="h-4 w-4" />
+                {t.uploadApplicationForm}
+                <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" className="sr-only" onChange={(event) => handleUpload("applicationForm", event.target.files?.[0] ?? null)} />
+              </label>
+              {applicationFormFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {applicationFormFileName}</p> : null}
+              {form.applicationFormUrl ? (
+                <a href={form.applicationFormUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 break-all text-xs font-medium text-sky-700">
+                  <FileText className="h-4 w-4 shrink-0" />
+                  {form.applicationFormName || form.applicationFormUrl}
+                </a>
+              ) : null}
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.documentUpload}</label>
               <p className="text-xs text-slate-500">{t.documentUploadHelp}</p>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
                 <Upload className="h-4 w-4" />
                 {t.uploadDocument}
-                <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" className="sr-only" onChange={(event) => handleUpload("document", event.target.files?.[0] ?? null)} />
+                <input type="file" accept=".pdf,.docx,.zip,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip" className="sr-only" onChange={(event) => handleUpload("supportingEvidence", event.target.files?.[0] ?? null)} />
               </label>
-              {documentFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {documentFileName}</p> : null}
+              {supportingEvidenceFileName ? <p className="text-xs font-medium text-slate-700">{t.selectedFile}: {supportingEvidenceFileName}</p> : null}
               <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-slate-700">{t.documentLinks}</p>
@@ -712,6 +808,19 @@ export function TeamManagementClient({
                 ) : null}
               </div>
             </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.relevantUrls}</label>
+            <Textarea
+              rows={3}
+              value={form.relevantUrls}
+              onChange={(event) => setForm((current) => ({ ...current, relevantUrls: event.target.value }))}
+              placeholder={t.relevantUrlsHelp}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">{t.note}</label>
+            <Textarea aria-label={t.note} value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">{t.reviewNote}</label>
