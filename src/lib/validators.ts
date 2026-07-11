@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { locationOptions, nominationTypes } from "@/lib/team-fields";
+
 function normalizeMemberName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -58,6 +60,42 @@ export const teamSchema = z.object({
       path: ["teamMembers"],
       message: "Team member names must be unique.",
     });
+  }
+});
+
+export const adminTeamSchema = teamSchema.safeExtend({
+  teamCode: z.string().trim().min(1, "Submission ID is required."),
+  teamName: z.string().trim().min(1, "Nominee name is required."),
+  organization: z.string().trim().min(1, "Organisation name is required."),
+  projectTitle: z.string(),
+  nominationType: z.enum(nominationTypes, "Nomination type is required."),
+  locations: z.array(z.enum(locationOptions)).min(1, "At least one location is required."),
+  supportingEvidenceSubmitted: z.boolean(),
+  videoSubmitted: z.boolean(),
+  applicationFormUrl: z.string().trim().min(1, "Application form upload is required."),
+  applicationFormName: z.string().trim().min(1, "Application form name is required."),
+  relevantUrls: z.string().trim().optional().or(z.literal("")),
+  note: z.string().optional(),
+}).superRefine((value, context) => {
+  const urls = value.relevantUrls
+    ?.split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean) ?? [];
+
+  for (const url of urls) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error("Unsupported URL protocol");
+      }
+    } catch {
+      context.addIssue({
+        code: "custom",
+        path: ["relevantUrls"],
+        message: "Relevant URLs must contain one complete http(s) URL per line.",
+      });
+      break;
+    }
   }
 });
 

@@ -11,6 +11,7 @@
     "db:push": "npm run db:setup",
     "db:seed": "tsx prisma/seed.ts",
     "db:migrate:negative-score-toggle": "tsx scripts/migrate-negative-score-toggle.ts",
+    "db:migrate:team-fields": "tsx scripts/migrate-team-field-requirements.ts",
     "teams:renumber-seq": "tsx scripts/renumber-team-seq-zero-based.ts",
     "verify:reset-scores": "tsx scripts/verify-reset-judge-scores.ts",
     "scores:recalculate": "tsx scripts/recalculate-scores.ts",

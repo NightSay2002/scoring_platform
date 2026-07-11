@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatRelativeTime, parseDocumentLinks, parseMembers, round } from "@/lib/utils";
+import { parseTeamLocations } from "@/lib/team-fields";
 
 const teamInclude = {
   category: {
@@ -522,6 +523,14 @@ export async function getTeamsManagementData() {
         projectTitle: team.projectTitle,
         projectDescription: team.projectDescription,
         organization: team.organization ?? "",
+        nominationType: team.nominationType === "THIRD_PARTY" ? ("THIRD_PARTY" as const) : ("SELF" as const),
+        locations: parseTeamLocations(team.locations),
+        supportingEvidenceSubmitted: team.supportingEvidenceSubmitted,
+        videoSubmitted: team.videoSubmitted,
+        applicationFormUrl: team.applicationFormUrl ?? "",
+        applicationFormName: team.applicationFormName ?? "",
+        relevantUrls: team.relevantUrls ?? "",
+        note: team.note ?? "",
         teamMembers: team.teamMembers,
         videoUrl: team.videoUrl ?? "",
         imageUrl: team.imageUrl ?? "",
