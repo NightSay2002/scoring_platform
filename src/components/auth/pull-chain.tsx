@@ -24,7 +24,10 @@ export function PullChain({ active = false, onTrigger }: PullChainProps) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center">
       <div className="pointer-events-none flex flex-col items-center">
-        <motion.div className="w-[2px] rounded-full bg-white/18" style={{ height: chainHeight }} />
+        <motion.div
+          className="w-1 bg-[radial-gradient(circle_at_center,rgba(224,205,169,0.72)_0_1.1px,rgba(86,74,56,0.5)_1.2px_1.7px,transparent_1.8px)] bg-[length:4px_6px] bg-repeat-y"
+          style={{ height: chainHeight }}
+        />
         <motion.button
           type="button"
           drag="y"
@@ -44,9 +47,16 @@ export function PullChain({ active = false, onTrigger }: PullChainProps) {
               damping: passedThreshold ? 16 : 22,
             });
           }}
-          className="pointer-events-auto flex h-7 w-7 cursor-grab items-center justify-center rounded-full border border-[#c6a36f]/45 bg-[radial-gradient(circle_at_35%_35%,#ffe0a7,#d0a060_65%,#9e6d33)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.4)]"
+          onKeyDown={(event) => {
+            if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
+              event.preventDefault();
+              onTrigger();
+            }
+          }}
+          className="pointer-events-auto flex h-7 w-7 cursor-grab items-center justify-center rounded-full border border-[#c6a36f]/45 bg-[radial-gradient(circle_at_35%_35%,#ffe0a7,#d0a060_65%,#9e6d33)] text-white shadow-[0_8px_18px_rgba(0,0,0,0.4)] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-[#f4d58d]/70 focus-visible:ring-offset-4 focus-visible:ring-offset-[#090b10]"
           style={{ y: dragY, rotate: handleRotate, scale: handleScale, touchAction: "none" }}
           aria-label={active ? "Pull lamp chain to hide the sign in form" : "Pull lamp chain to reveal the sign in form"}
+          aria-pressed={active}
         >
           <span className="h-2.5 w-2.5 rounded-full bg-[#f3d4a2]/70" />
         </motion.button>
