@@ -1,9 +1,6 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { ApprovalStatus, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
@@ -13,6 +10,7 @@ import { deleteJudgeScoreRecords } from "@/lib/reset-judge-scores";
 import { withSqliteWriteRetry } from "@/lib/sqlite-write-retry";
 import { normalizeDocumentLinks, serializeDocumentLinks, type DocumentLink } from "@/lib/utils";
 import { serializeTeamLocations, type NominationType, type TeamLocation } from "@/lib/team-fields";
+import { persistUpload } from "@/lib/upload-storage";
 import {
   adminTeamSchema,
   competitionSchema,
@@ -92,23 +90,6 @@ function revalidateAppData() {
   revalidatePath("/team/submission");
 }
 
-const uploadRules = {
-  avatar: {
-    folder: "avatars",
-    extensions: new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]),
-    maxBytes: 3 * 1024 * 1024,
-  },
-  document: {
-    folder: "documents",
-    extensions: new Set([".pdf", ".docx", ".zip"]),
-    maxBytes: 20 * 1024 * 1024,
-  },
-} as const;
-
-function sanitizeUploadName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-").slice(0, 80) || "upload";
-}
-
 export async function uploadTeamAssetAction(formData: FormData) {
   const session = await auth();
   if (!session?.user || (session.user.role !== Role.ADMIN && session.user.role !== Role.TEAM)) {
@@ -121,35 +102,7 @@ export async function uploadTeamAssetAction(formData: FormData) {
     return { error: "Please choose a valid file to upload." };
   }
 
-  const originalName = "name" in file && typeof file.name === "string" ? file.name : "upload";
-  const ext = path.extname(originalName).toLowerCase();
-  const rule = uploadRules[kind];
-  const size = "size" in file && typeof file.size === "number" ? file.size : 0;
-
-  if (!rule.extensions.has(ext)) {
-    return {
-      error:
-        kind === "avatar"
-          ? "Avatar must be a JPG, PNG, WEBP, or GIF image."
-          : "Document must be a PDF, DOCX, or ZIP file.",
-    };
-  }
-
-  if (size > rule.maxBytes) {
-    return { error: kind === "avatar" ? "Avatar must be 3MB or smaller." : "Document must be 20MB or smaller." };
-  }
-
-  const safeOriginalName = sanitizeUploadName(originalName);
-  const fileName = `${Date.now()}-${randomUUID()}-${safeOriginalName}`;
-  const uploadDir = path.join(process.cwd(), "public", "uploads", rule.folder);
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
-
-  return {
-    success: true,
-    url: `/uploads/${rule.folder}/${fileName}`,
-    name: originalName,
-  };
+  return persistUpload(kind, file, session.user.id);
 }
 
 async function generateNextTeamCode(tx: Prisma.TransactionClient) {
@@ -229,6 +182,24 @@ async function validateCategoryCompetition(categoryId: string, competitionId: st
   return null;
 }
 
+async function getCategoryReadinessError(categoryId: string) {
+  const criteria = await prisma.criterion.findMany({
+    where: { categoryId, active: true },
+    select: { weight: true },
+  });
+
+  if (!criteria.length) {
+    return "This award category has no active scoring criteria.";
+  }
+
+  const totalWeight = criteria.reduce((sum, criterion) => sum + criterion.weight, 0);
+  if (Math.abs(totalWeight - 100) > 0.0001) {
+    return `Active scoring criteria for this award category must total exactly 100% (currently ${totalWeight.toFixed(2)}%).`;
+  }
+
+  return null;
+}
+
 async function validateOpenCompetition(competitionId: string) {
   const competition = await prisma.competition.findUnique({
     where: { id: competitionId },
@@ -292,7 +263,7 @@ export async function upsertTeamAction(payload: {
   if (parsed.data.id) {
     const currentTeam = await prisma.team.findUnique({
       where: { id: parsed.data.id },
-      select: { updatedAt: true },
+      select: { updatedAt: true, submissionStatus: true },
     });
 
     if (!currentTeam) {
@@ -301,6 +272,18 @@ export async function upsertTeamAction(payload: {
 
     if (isStaleVersion(currentTeam.updatedAt, payload.expectedUpdatedAt)) {
       return staleAdminPageResult;
+    }
+
+    if (currentTeam.submissionStatus === ApprovalStatus.APPROVED) {
+      const readinessError = await getCategoryReadinessError(parsed.data.categoryId);
+      if (readinessError) {
+        return { error: readinessError };
+      }
+    }
+  } else if (parsed.data.submissionStatus === ApprovalStatus.APPROVED) {
+    const readinessError = await getCategoryReadinessError(parsed.data.categoryId);
+    if (readinessError) {
+      return { error: readinessError };
     }
   }
 
@@ -1056,7 +1039,7 @@ export async function setCompetitionScorerStatusAction(payload: {
     return { error: "Selected account cannot be a scoring participant." };
   }
 
-  const currentCanScore = currentScorerStatus?.canScore ?? true;
+  const currentCanScore = currentScorerStatus?.canScore ?? user.role !== Role.ADMIN;
   if (typeof payload.expectedCanScore === "boolean" && currentCanScore !== payload.expectedCanScore) {
     return staleAdminPageResult;
   }
@@ -1082,6 +1065,77 @@ export async function setCompetitionScorerStatusAction(payload: {
 
   revalidateAppData();
   return { success: true };
+}
+
+export async function setCategoryScorerAssignmentsAction(payload: {
+  competitionId: string;
+  userId: string;
+  categoryIds: string[];
+  expectedCategoryIds?: string[];
+}) {
+  await requireAdminLike();
+
+  const competitionId = payload.competitionId?.trim();
+  const userId = payload.userId?.trim();
+  const categoryIds = Array.from(new Set(payload.categoryIds.map((categoryId) => categoryId.trim()).filter(Boolean))).sort();
+
+  if (!competitionId || !userId) {
+    return { error: "Invalid award category assignment payload." };
+  }
+
+  const [competition, user, categories, currentAssignments] = await Promise.all([
+    prisma.competition.findUnique({ where: { id: competitionId }, select: { id: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, active: true } }),
+    prisma.category.findMany({
+      where: { id: { in: categoryIds }, competitionId },
+      select: { id: true },
+    }),
+    prisma.categoryAssignment.findMany({
+      where: { judgeId: userId, category: { competitionId } },
+      select: { categoryId: true },
+    }),
+  ]);
+
+  if (!competition) {
+    return { error: "Competition not found." };
+  }
+
+  if (!user || !user.active || (!isAdminLikeRole(user.role) && user.role !== Role.JUDGE)) {
+    return { error: "Selected account cannot be a scoring participant." };
+  }
+
+  if (categories.length !== categoryIds.length) {
+    return { error: "One or more award categories are invalid." };
+  }
+
+  const currentCategoryIds = currentAssignments.map((assignment) => assignment.categoryId).sort();
+  const expectedCategoryIds = payload.expectedCategoryIds
+    ? Array.from(new Set(payload.expectedCategoryIds.map((categoryId) => categoryId.trim()).filter(Boolean))).sort()
+    : null;
+  if (expectedCategoryIds && expectedCategoryIds.join("\u0000") !== currentCategoryIds.join("\u0000")) {
+    return staleAdminPageResult;
+  }
+
+  await withSqliteWriteRetry(() =>
+    prisma.$transaction(async (tx) => {
+      await tx.categoryAssignment.deleteMany({
+        where: { judgeId: userId, category: { competitionId } },
+      });
+
+      if (categoryIds.length) {
+        await tx.categoryAssignment.createMany({
+          data: categoryIds.map((categoryId) => ({ categoryId, judgeId: userId })),
+        });
+        await tx.settings.updateMany({
+          where: { id: "default" },
+          data: { judgeScope: "ASSIGNED" },
+        });
+      }
+    }),
+  );
+
+  revalidateAppData();
+  return { success: true, categoryIds };
 }
 
 export async function createCompetitionAction(payload: {
@@ -1480,6 +1534,11 @@ export async function approveTeamSubmissionAction(teamId: string, expectedUpdate
 
   if (!team.categoryId) {
     return { error: "Team must be assigned to a category before approval." };
+  }
+
+  const readinessError = await getCategoryReadinessError(team.categoryId);
+  if (readinessError) {
+    return { error: readinessError };
   }
 
   if (isStaleVersion(team.updatedAt, expectedUpdatedAt)) {

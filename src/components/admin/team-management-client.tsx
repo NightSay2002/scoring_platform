@@ -29,6 +29,7 @@ type TeamRow = {
   competitionName: string;
   categoryId: string;
   categoryName: string;
+  categoryReadyForScoring: boolean;
   ownerUserId: string;
   ownerEmail: string;
   projectTitle: string;
@@ -61,6 +62,9 @@ type Category = {
   competitionId: string;
   competitionName: string;
   name: string;
+  activeCriteriaCount: number;
+  activeCriteriaWeight: number;
+  readyForScoring: boolean;
 };
 
 type Competition = {
@@ -539,7 +543,13 @@ export function TeamManagementClient({
                           </a>
                         ) : null}
                         {team.submissionStatus !== "APPROVED" ? (
-                          <Button variant="ghost" size="sm" onClick={() => handleApprove(team)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleApprove(team)}
+                            disabled={!team.categoryReadyForScoring}
+                            title={!team.categoryReadyForScoring ? t.categoryNotReady : undefined}
+                          >
                             <ShieldCheck className="h-4 w-4 text-emerald-600" />
                           </Button>
                         ) : null}
@@ -618,10 +628,13 @@ export function TeamManagementClient({
                 <option value="">{t.selectCategory}</option>
                 {formCategories.map((category) => (
                   <option key={category.id} value={category.id}>
-                    {category.name}
+                    {category.readyForScoring ? category.name : `⚠ ${category.name}`}
                   </option>
                 ))}
               </select>
+              {form.categoryId && !formCategories.find((category) => category.id === form.categoryId)?.readyForScoring ? (
+                <p className="text-xs text-amber-700">{t.categoryNotReady}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">{t.organization}<RequiredMark /></label>

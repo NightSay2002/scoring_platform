@@ -101,6 +101,9 @@ type Category = {
   displayOrder: number;
   active: boolean;
   updatedAt: string;
+  activeCriteriaCount: number;
+  activeCriteriaWeight: number;
+  readyForScoring: boolean;
 };
 
 type Account = {
@@ -1039,9 +1042,17 @@ export function SettingsClient({
                       </TD>
                       <TD>{category.displayOrder}</TD>
                       <TD>
-                        <Badge tone={category.active ? "green" : "slate"}>
-                          {category.active ? common.statuses.active : common.statuses.inactive}
-                        </Badge>
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge tone={category.active ? "green" : "slate"}>
+                            {category.active ? common.statuses.active : common.statuses.inactive}
+                          </Badge>
+                          <Badge tone={category.readyForScoring ? "green" : "amber"}>
+                            {category.readyForScoring ? t.scoringReady : t.scoringNotReady}
+                          </Badge>
+                          <span className="text-xs text-slate-500">
+                            {category.activeCriteriaCount} · {category.activeCriteriaWeight}%
+                          </span>
+                        </div>
                       </TD>
                       <TD>
                         <div className="flex items-center gap-2">

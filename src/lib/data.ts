@@ -9,6 +9,11 @@ const teamInclude = {
   category: {
     include: {
       competition: true,
+      judgeAssignments: true,
+      criteria: {
+        where: { active: true },
+        select: { weight: true },
+      },
     },
   },
   ownerUser: true,
@@ -40,7 +45,7 @@ const teamInclude = {
 } satisfies Prisma.TeamInclude;
 
 type TeamWithRelations = Prisma.TeamGetPayload<{ include: typeof teamInclude }>;
-type ScoringParticipant = { id: string; name: string; role: Role; canScore: boolean };
+type ScoringParticipant = { id: string; name: string; role: Role; canScore: boolean; categoryIds: string[] };
 type CompetitionScorerStatus = { competitionId: string; userId: string; canScore: boolean };
 type DetailedResultExportRow = {
   rank: number | string;
@@ -89,7 +94,12 @@ function isAdminLikeRole(role: Role) {
 }
 
 function getCompetitionScoringParticipants(
-  users: Array<{ id: string; name: string; role: Role }>,
+  users: Array<{
+    id: string;
+    name: string;
+    role: Role;
+    categoryAssignments?: Array<{ categoryId: string }>;
+  }>,
   statuses: CompetitionScorerStatus[],
   competitionId: string | null | undefined,
 ) {
@@ -100,7 +110,8 @@ function getCompetitionScoringParticipants(
       id: user.id,
       name: user.name,
       role: user.role,
-      canScore: status?.canScore ?? true,
+      canScore: status?.canScore ?? user.role !== Role.ADMIN,
+      categoryIds: user.categoryAssignments?.map((assignment) => assignment.categoryId) ?? [],
     };
   });
 }
@@ -113,12 +124,17 @@ function getEnabledScoringParticipants(
   return getCompetitionScoringParticipants(users, statuses, competitionId).filter((participant) => participant.canScore);
 }
 
-function canUserScoreCompetition(statuses: CompetitionScorerStatus[], userId: string, competitionId: string | null | undefined) {
+function canUserScoreCompetition(
+  statuses: CompetitionScorerStatus[],
+  userId: string,
+  competitionId: string | null | undefined,
+  role: Role,
+) {
   if (!competitionId) {
     return true;
   }
 
-  return statuses.find((entry) => entry.userId === userId && entry.competitionId === competitionId)?.canScore ?? true;
+  return statuses.find((entry) => entry.userId === userId && entry.competitionId === competitionId)?.canScore ?? role !== Role.ADMIN;
 }
 
 export async function getSessionUser() {
@@ -199,15 +215,16 @@ function getAllVisibleJudgeIds(
     return scoringParticipants.map((participant) => participant.id);
   }
 
-  const chiefJudgeIds = scoringParticipants
-    .filter((participant) => isAdminLikeRole(participant.role))
-    .map((participant) => participant.id);
   const enabledParticipantIds = new Set(scoringParticipants.map((participant) => participant.id));
+  const categoryJudgeIds =
+    team.category?.judgeAssignments
+      .map((assignment) => assignment.judgeId)
+      .filter((judgeId) => enabledParticipantIds.has(judgeId)) ?? [];
   const assignedJudgeIds = team.assignments
     .map((assignment) => assignment.judgeId)
     .filter((judgeId) => enabledParticipantIds.has(judgeId));
 
-  return Array.from(new Set([...chiefJudgeIds, ...assignedJudgeIds]));
+  return Array.from(new Set([...categoryJudgeIds, ...assignedJudgeIds]));
 }
 
 function computeTeamMetrics(
@@ -326,6 +343,9 @@ export async function getAdminDashboardData() {
     prisma.user.findMany({
       where: scoringParticipantWhere,
       include: {
+        categoryAssignments: activeCompetitionId
+          ? { where: { category: { competitionId: activeCompetitionId } } }
+          : true,
         assignments: activeCompetitionId
           ? {
               where: {
@@ -376,14 +396,16 @@ export async function getAdminDashboardData() {
   }, 0);
 
   const judgeProgress = judges.map((judge) => {
-    const judgeCanScore = canUserScoreCompetition(scoringStatuses, judge.id, activeCompetitionId);
+    const judgeCanScore = canUserScoreCompetition(scoringStatuses, judge.id, activeCompetitionId, judge.role);
     const visibleApprovedTeams =
       !judgeCanScore
         ? []
         : settings?.judgeScope === "ASSIGNED"
-        ? isAdminLikeRole(judge.role)
-          ? approvedTeams
-          : approvedTeams.filter((team) => team.assignments.some((assignment) => assignment.judgeId === judge.id))
+        ? approvedTeams.filter(
+            (team) =>
+              team.assignments.some((assignment) => assignment.judgeId === judge.id) ||
+              team.category?.judgeAssignments.some((assignment) => assignment.judgeId === judge.id),
+          )
         : approvedTeams;
     const submittedCount = judge.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
     const draftCount = judge.scores.filter((score) => score.status === ScoreStatus.DRAFT).length;
@@ -470,7 +492,12 @@ export async function getTeamsManagementData() {
     }),
     prisma.user.findMany({
       where: scoringParticipantWhere,
-      select: { id: true, name: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        categoryAssignments: { select: { categoryId: true } },
+      },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
     prisma.competitionScorer.findMany({
@@ -497,6 +524,10 @@ export async function getTeamsManagementData() {
             name: true,
           },
         },
+        criteria: {
+          where: { active: true },
+          select: { weight: true },
+        },
       },
       orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
     }),
@@ -518,6 +549,10 @@ export async function getTeamsManagementData() {
         competitionName: team.category?.competition?.name ?? "Uncategorized",
         categoryId: team.categoryId ?? "",
         categoryName: team.category?.name ?? "Uncategorized",
+        categoryReadyForScoring: Boolean(
+          team.category?.criteria.length &&
+          Math.abs(team.category.criteria.reduce((sum, criterion) => sum + criterion.weight, 0) - 100) <= 0.0001,
+        ),
         ownerUserId: team.ownerUserId ?? "",
         ownerEmail: team.ownerUser?.email ?? "",
         projectTitle: team.projectTitle,
@@ -551,12 +586,18 @@ export async function getTeamsManagementData() {
     }),
     competitions,
     teamAccounts,
-    categories: categories.map((category) => ({
-      id: category.id,
-      competitionId: category.competitionId,
-      competitionName: category.competition.name,
-      name: category.name,
-    })),
+    categories: categories.map((category) => {
+      const activeCriteriaWeight = round(category.criteria.reduce((sum, criterion) => sum + criterion.weight, 0));
+      return {
+        id: category.id,
+        competitionId: category.competitionId,
+        competitionName: category.competition.name,
+        name: category.name,
+        activeCriteriaCount: category.criteria.length,
+        activeCriteriaWeight,
+        readyForScoring: category.criteria.length > 0 && Math.abs(activeCriteriaWeight - 100) <= 0.0001,
+      };
+    }),
     judges,
     judgeScope: settings?.judgeScope ?? "ALL",
   };
@@ -655,7 +696,17 @@ export async function getLeaderboardData(competitionId?: string, judgeId?: strin
     }),
     prisma.user.findMany({
       where: scoringParticipantWhere,
-      select: { id: true, name: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        categoryAssignments: selectedCompetitionId
+          ? {
+              where: { category: { competitionId: selectedCompetitionId } },
+              select: { categoryId: true },
+            }
+          : { select: { categoryId: true } },
+      },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
     selectedCompetitionId
@@ -777,6 +828,12 @@ export async function getSettingsPageData(competitionId?: string) {
     }),
     prisma.category.findMany({
       where: selectedCompetitionId ? { competitionId: selectedCompetitionId } : undefined,
+      include: {
+        criteria: {
+          where: { active: true },
+          select: { weight: true },
+        },
+      },
       orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
     }),
     prisma.user.findMany({
@@ -856,15 +913,21 @@ export async function getSettingsPageData(competitionId?: string) {
         updatedAt: subCriterion.updatedAt.toISOString(),
       })),
     })),
-    categories: categories.map((category) => ({
-      id: category.id,
-      competitionId: category.competitionId,
-      name: category.name,
-      description: category.description,
-      displayOrder: category.displayOrder,
-      active: category.active,
-      updatedAt: category.updatedAt.toISOString(),
-    })),
+    categories: categories.map((category) => {
+      const activeCriteriaWeight = round(category.criteria.reduce((sum, criterion) => sum + criterion.weight, 0));
+      return {
+        id: category.id,
+        competitionId: category.competitionId,
+        name: category.name,
+        description: category.description,
+        displayOrder: category.displayOrder,
+        active: category.active,
+        updatedAt: category.updatedAt.toISOString(),
+        activeCriteriaCount: category.criteria.length,
+        activeCriteriaWeight,
+        readyForScoring: category.criteria.length > 0 && Math.abs(activeCriteriaWeight - 100) <= 0.0001,
+      };
+    }),
     accounts: accounts.map((account) => ({
       id: account.id,
       name: account.name,
@@ -914,6 +977,9 @@ export async function getJudgeDashboardData(userId: string) {
       include: {
         category: {
           include: {
+            judgeAssignments: {
+              where: { judgeId: userId },
+            },
             competition: {
               include: {
                 images: {
@@ -944,15 +1010,19 @@ export async function getJudgeDashboardData(userId: string) {
 
   const isChiefJudge = isAdminLikeRole(judge.role);
   const scorableTeams = teams.filter((team) =>
-    canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId),
+    canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId, judge.role),
   );
   const visibleTeams = (
-    !isChiefJudge && settings?.judgeScope === "ASSIGNED"
-      ? scorableTeams.filter((team) => team.assignments.length > 0)
-      : scorableTeams
+    isChiefJudge
+      ? teams
+      : settings?.judgeScope === "ASSIGNED"
+        ? scorableTeams.filter((team) => team.assignments.length > 0 || (team.category?.judgeAssignments.length ?? 0) > 0)
+        : scorableTeams
   ).slice().sort(compareTeamCode);
-  const submittedCount = judge.scores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
-  const draftCount = judge.scores.filter((score) => score.status === ScoreStatus.DRAFT).length;
+  const visibleTeamIds = new Set(visibleTeams.map((team) => team.id));
+  const visibleScores = judge.scores.filter((score) => visibleTeamIds.has(score.teamId));
+  const submittedCount = visibleScores.filter((score) => score.status === ScoreStatus.SUBMITTED || score.status === ScoreStatus.EDITED).length;
+  const draftCount = visibleScores.filter((score) => score.status === ScoreStatus.DRAFT).length;
   const completionRate = visibleTeams.length ? round((submittedCount / visibleTeams.length) * 100, 0) : 0;
   const competitions = Array.from(
     new Map(
@@ -1016,7 +1086,7 @@ export async function getJudgeDashboardData(userId: string) {
     },
     competitions,
     categories,
-    recentScores: judge.scores.slice(0, 4),
+    recentScores: visibleScores.slice(0, 4),
   };
 }
 
@@ -1040,6 +1110,10 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
         category: {
           select: {
             competitionId: true,
+            judgeAssignments: {
+              where: { judgeId: userId },
+              select: { id: true },
+            },
           },
         },
         assignments: {
@@ -1060,8 +1134,14 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
       include: {
         category: {
           include: {
+            judgeAssignments: {
+              where: { judgeId: userId },
+            },
             competition: true,
           },
+        },
+        assignments: {
+          where: { judgeId: userId },
         },
         scores: {
           where: { judgeId: userId },
@@ -1100,9 +1180,8 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
     return null;
   }
 
-  if (!canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId)) {
-    return null;
-  }
+  const effectiveRole = role ?? Role.JUDGE;
+  const canScoreCompetition = canUserScoreCompetition(scoringStatuses, userId, team.category?.competitionId, effectiveRole);
 
   const criteria = await prisma.criterion.findMany({
     where: {
@@ -1118,22 +1197,27 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
     orderBy: { displayOrder: "asc" },
   });
 
-  const isChiefJudge = role === Role.ADMIN || role === Role.CHIEF_JUDGE;
+  const isChiefJudge = effectiveRole === Role.ADMIN || effectiveRole === Role.CHIEF_JUDGE;
   const scorableAllTeams = allTeams.filter((entry) =>
-    canUserScoreCompetition(scoringStatuses, userId, entry.category?.competitionId),
+    canUserScoreCompetition(scoringStatuses, userId, entry.category?.competitionId, effectiveRole),
   );
+  const targetIsAssigned = team.assignments.length > 0 || (team.category?.judgeAssignments.length ?? 0) > 0;
   const isVisible =
     isChiefJudge ||
-    settings?.judgeScope === "ALL" ||
-    scorableAllTeams.some((entry) => entry.id === teamId && entry.assignments.length > 0);
+    (canScoreCompetition &&
+      (settings?.judgeScope === "ALL" || targetIsAssigned));
   if (!isVisible) {
     return null;
   }
 
   const visibleTeams = (
-    isChiefJudge || settings?.judgeScope === "ALL"
-      ? scorableAllTeams
-      : scorableAllTeams.filter((entry) => entry.assignments.length > 0)
+    isChiefJudge
+      ? allTeams
+      : settings?.judgeScope === "ALL"
+        ? scorableAllTeams
+        : scorableAllTeams.filter(
+            (entry) => entry.assignments.length > 0 || (entry.category?.judgeAssignments.length ?? 0) > 0,
+          )
   ).slice().sort(compareTeamCode);
   const currentIndex = visibleTeams.findIndex((entry) => entry.id === teamId);
   const submittedCount = visibleTeams.filter((entry) =>
@@ -1143,9 +1227,15 @@ export async function getJudgeScoringPageData(userId: string, teamId: string, ro
   return {
     settings,
     scoringAvailability: getScoringAvailability(settings, team.category?.competition ?? null),
+    canScoreTeam: canScoreCompetition && (settings?.judgeScope !== "ASSIGNED" || targetIsAssigned),
     criteria,
     team: {
       ...team,
+      locations: parseTeamLocations(team.locations),
+      relevantUrls: team.relevantUrls
+        ?.split("\n")
+        .map((url) => url.trim())
+        .filter(Boolean) ?? [],
       documentLinks: parseDocumentLinks(team.documentLinks, {
         documentName: team.documentName,
         documentUrl: team.documentUrl,
@@ -1426,6 +1516,7 @@ export async function getExportData(competitionId?: string) {
             name: score.judge.name,
             role: score.judge.role,
             canScore: true,
+            categoryIds: [],
           });
         }
       }

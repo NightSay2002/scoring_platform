@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils";
 
 export function LoginForm({
   revealed,
+  supportEmail,
   className,
 }: {
   revealed?: boolean;
+  supportEmail: string;
   className?: string;
 }) {
   const [error, setError] = useState("");
@@ -122,17 +124,9 @@ export function LoginForm({
           </button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-4 text-sm">
-        <label className="flex items-center gap-3 text-[#a89f92]">
-          <input
-            type="checkbox"
-            name="rememberMe"
-            className="h-4 w-4 rounded border-white/20 bg-[#0f1013] text-[#d9b65f] focus:ring-[#d9b65f]/25"
-          />
-          {messages.login.rememberMe}
-        </label>
+      <div className="flex justify-end text-sm">
         <Link
-          href={`mailto:admin@techscore.local?subject=${resetSubject}`}
+          href={`mailto:${encodeURIComponent(supportEmail)}?subject=${resetSubject}`}
           className="font-medium text-[#d9caa0] transition hover:text-[#f1e5bf]"
         >
           {messages.login.forgotPassword}

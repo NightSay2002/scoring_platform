@@ -76,7 +76,16 @@ async function requireScorer() {
     throw new Error("Unauthorized");
   }
 
-  return session.user;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, active: true },
+  });
+
+  if (!user?.active || (user.role !== Role.JUDGE && user.role !== Role.ADMIN && user.role !== Role.CHIEF_JUDGE)) {
+    throw new Error("Unauthorized");
+  }
+
+  return user;
 }
 
 async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: ScoreStatus) {
@@ -95,6 +104,9 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
         category: {
           include: {
             competition: true,
+            judgeAssignments: {
+              where: { judgeId: scorer.id },
+            },
           },
         },
         assignments: {
@@ -120,13 +132,18 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
       select: { canScore: true },
     });
 
-    if (scorerStatus?.canScore === false) {
+    const canScoreCompetition = scorerStatus?.canScore ?? scorer.role !== Role.ADMIN;
+    if (!canScoreCompetition) {
       return { error: "You are not allowed to score this competition." };
     }
   }
 
-  if (scorer.role !== Role.ADMIN && scorer.role !== Role.CHIEF_JUDGE && settings?.judgeScope === "ASSIGNED" && team.assignments.length === 0) {
-    return { error: "You are not assigned to this team." };
+  if (
+    settings?.judgeScope === "ASSIGNED" &&
+    team.assignments.length === 0 &&
+    (team.category?.judgeAssignments.length ?? 0) === 0
+  ) {
+    return { error: "You are not assigned to this award category." };
   }
 
   const scoringClosedMessage = getScoringClosedMessage(settings, team.category?.competition ?? null);
@@ -157,8 +174,8 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
   }
 
   const totalWeight = criteria.reduce((sum, criterion) => sum + criterion.weight, 0);
-  if (totalWeight > 100.0001) {
-    return { error: "Category criteria weights cannot exceed 100% before scoring." };
+  if (Math.abs(totalWeight - 100) > 0.0001) {
+    return { error: `Category criteria weights must total exactly 100% before scoring (currently ${totalWeight.toFixed(2)}%).` };
   }
 
   const criteriaMap = new Map(criteria.map((criterion) => [criterion.id, criterion]));
@@ -264,10 +281,13 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
   const weightedAverage = round(normalizedItems.reduce((sum, item) => sum + item.weightedValue, 0));
   const totalScore = weightedAverage;
   const weightedScore = weightedAverage;
+  const existingIsFinal = existing?.status === ScoreStatus.SUBMITTED || existing?.status === ScoreStatus.EDITED;
   const nextStatus =
-    existing?.status === ScoreStatus.SUBMITTED && status === ScoreStatus.SUBMITTED
+    status === ScoreStatus.SUBMITTED && existingIsFinal
       ? ScoreStatus.EDITED
-      : status;
+      : status === ScoreStatus.DRAFT && existingIsFinal
+        ? existing.status
+        : status;
 
   const saveData: Prisma.ScoreUncheckedCreateInput = {
     teamId: parsed.data.teamId,
@@ -276,7 +296,10 @@ async function saveScore(payload: z.infer<typeof scorePayloadSchema>, status: Sc
     totalScore,
     weightedScore,
     status: nextStatus,
-    submittedAt: status === ScoreStatus.SUBMITTED ? new Date() : existing?.submittedAt ?? null,
+    submittedAt:
+      status === ScoreStatus.SUBMITTED
+        ? existing?.submittedAt ?? new Date()
+        : existing?.submittedAt ?? null,
   };
 
   const score = await withSqliteWriteRetry(() =>
