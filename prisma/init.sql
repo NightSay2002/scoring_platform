@@ -100,6 +100,15 @@ CREATE TABLE "TeamAssignment" (
     CONSTRAINT "TeamAssignment_judgeId_fkey" FOREIGN KEY ("judgeId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE "CategoryAssignment" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "categoryId" TEXT NOT NULL,
+    "judgeId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "CategoryAssignment_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CategoryAssignment_judgeId_fkey" FOREIGN KEY ("judgeId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE "Criterion" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "categoryId" TEXT NOT NULL,
@@ -205,6 +214,7 @@ CREATE UNIQUE INDEX "CompetitionScorer_competitionId_userId_key" ON "Competition
 CREATE UNIQUE INDEX "Category_competitionId_name_key" ON "Category"("competitionId", "name");
 CREATE UNIQUE INDEX "Team_teamCode_key" ON "Team"("teamCode");
 CREATE UNIQUE INDEX "TeamAssignment_teamId_judgeId_key" ON "TeamAssignment"("teamId", "judgeId");
+CREATE UNIQUE INDEX "CategoryAssignment_categoryId_judgeId_key" ON "CategoryAssignment"("categoryId", "judgeId");
 CREATE UNIQUE INDEX "Criterion_categoryId_name_key" ON "Criterion"("categoryId", "name");
 CREATE UNIQUE INDEX "CriterionSubItem_criterionId_name_key" ON "CriterionSubItem"("criterionId", "name");
 CREATE UNIQUE INDEX "Score_teamId_judgeId_key" ON "Score"("teamId", "judgeId");

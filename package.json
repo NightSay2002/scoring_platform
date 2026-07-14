@@ -12,6 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:migrate:negative-score-toggle": "tsx scripts/migrate-negative-score-toggle.ts",
     "db:migrate:team-fields": "tsx scripts/migrate-team-field-requirements.ts",
+    "db:migrate:category-assignments": "tsx scripts/migrate-category-judge-assignments.ts",
     "teams:renumber-seq": "tsx scripts/renumber-team-seq-zero-based.ts",
     "verify:reset-scores": "tsx scripts/verify-reset-judge-scores.ts",
     "scores:recalculate": "tsx scripts/recalculate-scores.ts",
@@ -27,7 +28,7 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.8.0",
-    "next": "16.2.4",
+    "next": "16.2.10",
     "next-auth": "^5.0.0-beta.30",
     "prisma": "^6.7.0",
     "react": "19.2.4",
@@ -41,9 +42,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "overrides": {
+    "esbuild": "0.28.1",
+    "postcss": "8.5.10"
   }
 }

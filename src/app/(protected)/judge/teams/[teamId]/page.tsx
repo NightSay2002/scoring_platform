@@ -55,12 +55,46 @@ export default async function JudgeScoringPage({
             <CardHeader title={t.teamProfileTitle} description={t.teamProfileDesc} />
             <CardContent className="space-y-4 text-sm text-slate-600">
               <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.submissionId}</p>
+                <p className="mt-1 text-sm font-medium text-slate-950">{data.team.teamCode}</p>
+              </div>
+              <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.category}</p>
                 <p className="mt-1 text-sm font-medium text-slate-950">{data.team.category?.name ?? common.labels.uncategorized}</p>
               </div>
               <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.nominationType}</p>
+                <p className="mt-1 text-sm font-medium text-slate-950">
+                  {data.team.nominationType === "THIRD_PARTY" ? t.thirdPartyNomination : t.selfNomination}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.nomineeName}</p>
+                <p className="mt-1 text-sm font-medium text-slate-950">{data.team.teamName}</p>
+              </div>
+              <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.organization}</p>
                 <p className="mt-1 text-sm font-medium text-slate-950">{data.team.organization || common.labels.notProvided}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.projectTitle}</p>
+                <p className="mt-1 text-sm font-medium text-slate-950">{data.team.projectTitle}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.locations}</p>
+                <p className="mt-1 text-sm font-medium text-slate-950">
+                  {data.team.locations.length ? data.team.locations.join(", ") : common.labels.notProvided}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{t.supportingEvidenceSubmitted}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-950">{data.team.supportingEvidenceSubmitted ? t.yes : t.no}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{t.videoSubmitted}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-950">{data.team.videoSubmitted ? t.yes : t.no}</p>
+                </div>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.teamMembers}</p>
@@ -76,11 +110,40 @@ export default async function JudgeScoringPage({
                 <p className="text-xs uppercase tracking-wide text-slate-400">{t.description}</p>
                 <p className="mt-2 leading-7">{data.team.projectDescription}</p>
               </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">{t.note}</p>
+                <p className="mt-2 whitespace-pre-wrap leading-7">{data.team.note || common.labels.notProvided}</p>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader title={t.teamAttachmentsTitle} description={t.teamAttachmentsDesc} />
             <CardContent className="space-y-4">
+              {data.team.applicationFormUrl ? (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">{t.applicationForm}</p>
+                    <p className="mt-1 break-all text-sm font-medium text-slate-950">
+                      {data.team.applicationFormName || data.team.applicationFormUrl}
+                    </p>
+                  </div>
+                  <Link
+                    href={data.team.applicationFormUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white visited:!text-white hover:!text-white"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t.downloadFile}
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                  {t.noApplicationForm}
+                </div>
+              )}
+
               {data.team.imageUrl ? (
                 <div className="space-y-3">
                   <p className="text-xs uppercase tracking-wide text-slate-400">{t.submittedImage}</p>
@@ -135,6 +198,17 @@ export default async function JudgeScoringPage({
                   {t.noSubmittedFile}
                 </div>
               )}
+
+              {data.team.relevantUrls.length ? (
+                <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{t.relevantUrls}</p>
+                  {data.team.relevantUrls.map((url) => (
+                    <Link key={url} href={url} target="_blank" rel="noreferrer" className="block break-all text-sm font-medium text-sky-700">
+                      {url}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
           <Card>
@@ -161,8 +235,8 @@ export default async function JudgeScoringPage({
           criteria={data.criteria}
           existingScore={data.existingScore}
           allowEditAfterSubmit={data.settings?.allowEditAfterSubmit ?? true}
-          scoringClosed={data.scoringAvailability.scoringClosed}
-          scoringClosedReason={data.scoringAvailability.scoringClosedReason}
+          scoringClosed={data.scoringAvailability.scoringClosed || !data.canScoreTeam}
+          scoringClosedReason={data.canScoreTeam ? data.scoringAvailability.scoringClosedReason : t.notAssignedToCategory}
           navigation={data.navigation}
         />
       </div>

@@ -95,7 +95,9 @@ const authConfig: NextAuthConfig = {
       return session;
     },
   },
-  secret: process.env.AUTH_SECRET ?? "dev-only-secret-for-scoring-platform",
+  secret:
+    process.env.AUTH_SECRET ??
+    (process.env.NODE_ENV === "development" ? "dev-only-secret-for-scoring-platform" : undefined),
 };
 
 export const { auth, handlers, signIn, signOut } = NextAuth(authConfig);

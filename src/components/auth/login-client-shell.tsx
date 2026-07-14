@@ -2,6 +2,6 @@
 
 import { LoginExperienceMount } from "@/components/auth/login-experience-mount";
 
-export function LoginClientShell() {
-  return <LoginExperienceMount />;
+export function LoginClientShell({ supportEmail }: { supportEmail: string }) {
+  return <LoginExperienceMount supportEmail={supportEmail} />;
 }

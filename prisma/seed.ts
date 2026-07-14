@@ -68,6 +68,7 @@ async function main() {
   await prisma.scoreAudit.deleteMany();
   await prisma.scoreItem.deleteMany();
   await prisma.score.deleteMany();
+  await prisma.categoryAssignment.deleteMany();
   await prisma.teamAssignment.deleteMany();
   await prisma.team.deleteMany();
   await prisma.criterion.deleteMany();
@@ -368,6 +369,15 @@ async function main() {
       { teamId: teams[4].id, judgeId: judge2.id },
       { teamId: teams[4].id, judgeId: judge3.id },
     ],
+  });
+
+  await prisma.categoryAssignment.createMany({
+    data: [categoryAi, categoryRobotics, categorySustainability].flatMap((category) =>
+      [judge1, judge2, judge3].map((judge) => ({
+        categoryId: category.id,
+        judgeId: judge.id,
+      })),
+    ),
   });
 
   async function createScore(input: {

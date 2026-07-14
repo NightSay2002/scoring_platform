@@ -30,6 +30,9 @@ prisma/*.db-shm
 prisma/*.db-wal
 
 # user uploaded runtime assets
+runtime-uploads/**
+!runtime-uploads/
+!runtime-uploads/.gitkeep
 public/uploads/**
 !public/uploads/
 !public/uploads/.gitkeep

@@ -148,7 +148,8 @@ middleware.ts
 - `Category`
 - `Criterion`
 - `Team`
-- `TeamAssignment`
+- `TeamAssignment` (legacy per-team assignments)
+- `CategoryAssignment` (award-category judge assignments)
 - `Score`
 - `ScoreItem`
 - `Settings`
@@ -206,11 +207,14 @@ Open [http://localhost:3000](http://localhost:3000).
 - `npm run db:setup`
 - `npm run db:generate`
 - `npm run db:seed`
+- `npm run db:migrate:category-assignments` (idempotent production migration; also converts legacy team assignments)
 - `npm run db:push` (alias to `db:setup`)
 
 ## Notes / Constraints
 
 - Default local MVP uses SQLite (`DATABASE_URL=file:./prisma/dev.db`).
+- Runtime uploads are stored under `runtime-uploads/` and served through authenticated `/uploads/...` routes. Keep this directory persistent across deployments.
+- Set `SUPPORT_EMAIL` to the address used by the login page's forgot-password link.
 - If Prisma client generation fails on Windows with `EPERM` for query engine rename, ensure no process is holding `node_modules/.prisma/client/*` and rerun `npm run db:generate`.
 - CSV export is implemented; XLSX export is not included yet.
 rm -rf .nextnpm run dev -- -p 9747

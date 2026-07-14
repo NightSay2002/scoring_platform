@@ -49,6 +49,7 @@ model User {
   lastLoginAt  DateTime?
   scores       Score[]
   assignments  TeamAssignment[]
+  categoryAssignments CategoryAssignment[]
   auditEvents  ScoreAudit[]
   ownedTeams   Team[]           @relation("TeamOwner")
   approvedTeams Team[]          @relation("TeamApprover")
@@ -144,6 +145,7 @@ model Category {
   competition  Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
   teams        Team[]
   criteria     Criterion[]
+  judgeAssignments CategoryAssignment[]
 
   @@unique([competitionId, name])
 }
@@ -157,6 +159,17 @@ model TeamAssignment {
   judge      User     @relation(fields: [judgeId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, judgeId])
+}
+
+model CategoryAssignment {
+  id         String   @id @default(cuid())
+  categoryId String
+  judgeId    String
+  createdAt  DateTime @default(now())
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  judge      User     @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, judgeId])
 }
 
 model Criterion {

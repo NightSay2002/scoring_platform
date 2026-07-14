@@ -96,6 +96,7 @@ export default async function AdminLeaderboardPage({
             <ScoringParticipantsButton
               competitionId={data.selectedCompetitionId}
               participants={data.scoringParticipants}
+              categories={data.categorySections.map((category) => ({ id: category.id, name: category.name }))}
               labels={{
                 manageScorers: t.manageScorers,
                 scoringParticipantsTitle: t.scoringParticipantsTitle,
@@ -106,6 +107,10 @@ export default async function AdminLeaderboardPage({
                 chiefJudgeRole: messages.header.role.CHIEF_JUDGE,
                 judgeRole: messages.header.role.JUDGE,
                 scorerUpdated: t.scorerUpdated,
+                awardCategories: t.awardCategories,
+                categoryAssignmentsDesc: t.categoryAssignmentsDesc,
+                assignmentUpdated: t.assignmentUpdated,
+                noCategoryAssigned: t.noCategoryAssigned,
                 stalePageRefresh: t.stalePageRefresh,
                 close: t.close,
               }}

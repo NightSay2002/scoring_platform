@@ -10,7 +10,7 @@ import { LampPanel } from "@/components/auth/lamp-panel";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent } from "@/components/shared/card";
 
-export function LoginExperience() {
+export function LoginExperience({ supportEmail }: { supportEmail: string }) {
   const [revealed, setRevealed] = useState(false);
   const mobileSheetY = useMotionValue(0);
   const mobileDragControls = useDragControls();
@@ -94,7 +94,7 @@ export function LoginExperience() {
                   <h2 className="text-3xl font-semibold tracking-tight text-white">{messages.login.title}</h2>
                   <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
                 </div>
-                <LoginForm revealed={revealed} />
+                <LoginForm revealed={revealed} supportEmail={supportEmail} />
               </CardContent>
             </Card>
           </motion.div>
@@ -165,7 +165,7 @@ export function LoginExperience() {
               <h2 className="text-3xl font-semibold tracking-tight text-white">{messages.login.title}</h2>
               <p className="mt-2 text-sm text-[#b6b1a8]">{messages.login.subtitle}</p>
             </div>
-            <LoginForm revealed={revealed} />
+            <LoginForm revealed={revealed} supportEmail={supportEmail} />
           </div>
         </motion.div>
       </motion.div>

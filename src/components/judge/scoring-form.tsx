@@ -518,10 +518,12 @@ export function ScoringForm({
             ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-            <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={handleSaveDraft} disabled={locked || pending}>
-              <Save className="h-4 w-4" />
-              {pending ? t.saving : t.saveDraft}
-            </Button>
+            {status === "DRAFT" ? (
+              <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={handleSaveDraft} disabled={locked || pending}>
+                <Save className="h-4 w-4" />
+                {pending ? t.saving : t.saveDraft}
+              </Button>
+            ) : null}
             <Button className="w-full gap-2 sm:w-auto" onClick={handleSubmit} disabled={locked || pending}>
               <CheckCircle2 className="h-4 w-4" />
               {pending ? t.submitting : t.submitFinal}
