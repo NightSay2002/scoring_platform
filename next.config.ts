@@ -18,12 +18,16 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    return [
-      {
-        source: "/uploads/:folder/:fileName",
-        destination: "/api/uploads/:folder/:fileName",
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: "/uploads/:folder/:fileName",
+          destination: "/api/uploads/:folder/:fileName",
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 
