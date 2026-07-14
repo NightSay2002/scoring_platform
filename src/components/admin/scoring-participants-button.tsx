@@ -137,7 +137,7 @@ export function ScoringParticipantsButton({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
@@ -150,7 +150,7 @@ export function ScoringParticipantsButton({
                 {labels.close}
               </Button>
             </div>
-            <div className="space-y-3 px-5 py-4">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
               {localParticipants.map((participant) => (
                 <div key={participant.id} className="space-y-3 rounded-xl border border-slate-200 p-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
